@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 let data,engine,mode='daily',date=easternDate(),start,end,optimal,route=[],finished=false,revealed=false,selectedStart,selectedEnd,hintsUsed=0,hintedPlayers=new Set();
 const allDecades=Array.from({length:12},(_,i)=>1910+i*10);
 let selectedDecades=allDecades;
-const key=()=>`line-change-v1:${data.version}:${date}`;
+const key=()=>`line-change-v1:${data.version}:${date}:${puzzleFor(data,date).slice(0,2).join('-')}`;
 function read(k,fallback){try{return JSON.parse(localStorage.getItem(k))??fallback}catch{return fallback}}
 function write(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{status('Your browser cannot save progress. You can still play.')}}
 function status(s,error=false){$('status').textContent=s;$('status').classList.toggle('error',error)}

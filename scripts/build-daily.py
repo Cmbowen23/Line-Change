@@ -37,9 +37,5 @@ while candidates and len(puzzles)<730:
 assert len(puzzles)==730
 existing=R/'public/data/daily-puzzles.json'
 overrides=json.loads(existing.read_text()).get('overrides',{}) if existing.exists() else {}
-# Keep the already-published challenge fixed for players mid-attempt.
-import datetime
-date='2026-10-04';day=(datetime.date.fromisoformat(date)-datetime.date(1970,1,1)).days
-overrides.setdefault(date,d['puzzles'][day%len(d['puzzles'])])
 existing.write_text(json.dumps({'policy':'Curated notable endpoints; 2–4 links; all NHL players allowed as intermediates','notablePlayerIds':ids,'overrides':overrides,'puzzles':puzzles},separators=(',',':')))
 print(len(ids),'curated players;',len(puzzles),'daily matchups')
