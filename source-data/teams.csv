@@ -1,0 +1,63 @@
+team_id,team_abbrev,team_name,franchise_id
+1,NJD,New Jersey Devils,23
+2,NYI,New York Islanders,22
+3,NYR,New York Rangers,10
+4,PHI,Philadelphia Flyers,16
+5,PIT,Pittsburgh Penguins,17
+6,BOS,Boston Bruins,6
+7,BUF,Buffalo Sabres,19
+8,MTL,Montréal Canadiens,1
+9,OTT,Ottawa Senators,30
+10,TOR,Toronto Maple Leafs,5
+11,ATL,Atlanta Thrashers,35
+12,CAR,Carolina Hurricanes,26
+13,FLA,Florida Panthers,33
+14,TBL,Tampa Bay Lightning,31
+15,WSH,Washington Capitals,24
+16,CHI,Chicago Blackhawks,11
+17,DET,Detroit Red Wings,12
+18,NSH,Nashville Predators,34
+19,STL,St. Louis Blues,18
+20,CGY,Calgary Flames,21
+21,COL,Colorado Avalanche,27
+22,EDM,Edmonton Oilers,25
+23,VAN,Vancouver Canucks,20
+24,ANA,Anaheim Ducks,32
+25,DAL,Dallas Stars,15
+26,LAK,Los Angeles Kings,14
+27,PHX,Phoenix Coyotes,28
+28,SJS,San Jose Sharks,29
+29,CBJ,Columbus Blue Jackets,36
+30,MIN,Minnesota Wild,37
+31,MNS,Minnesota North Stars,15
+32,QUE,Quebec Nordiques,27
+33,WIN,Winnipeg Jets (1979),35
+34,HFD,Hartford Whalers,26
+35,CLR,Colorado Rockies,23
+36,SEN,Ottawa Senators (1917),3
+37,HAM,Hamilton Tigers,4
+38,PIR,Pittsburgh Pirates,9
+39,QUA,Philadelphia Quakers,9
+40,DCG,Detroit Cougars,12
+41,MWN,Montreal Wanderers,2
+42,QBD,Quebec Bulldogs,4
+43,MMR,Montreal Maroons,7
+44,NYA,New York Americans,8
+45,SLE,St. Louis Eagles,3
+46,OAK,Oakland Seals,13
+47,AFM,Atlanta Flames,21
+48,KCS,Kansas City Scouts,23
+49,CLE,Cleveland Barons,13
+50,DFL,Detroit Falcons,12
+51,BRK,Brooklyn Americans,8
+52,WPG,Winnipeg Jets,35
+53,ARI,Arizona Coyotes,28
+54,VGK,Vegas Golden Knights,38
+55,SEA,Seattle Kraken,39
+56,CGS,California Golden Seals,13
+57,TAN,Toronto Arenas,5
+58,TSP,Toronto St. Patricks,5
+59,UTA,Utah Hockey Club,40
+68,UTA,Utah Mammoth,40
+70,TBD,To be determined,
+99,NHL,NHL,

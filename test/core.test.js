@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {createEngine,puzzleFor,easternDate,streakFor} from '../public/core.js';
+const d=JSON.parse(readFileSync(new URL('../public/data/hockey.json',import.meta.url))),e=createEngine(d);const id=name=>Number(Object.entries(d.players).find(([p,v])=>v[0]===name)[0]);
+test('historical, traded and false connections',()=>{assert.ok(e.evidence(id('Wayne Gretzky'),id('Mark Messier')).length);assert.ok(e.evidence(id('Claude Giroux'),id('Derick Brassard')).length);assert.equal(e.evidence(id('Sidney Crosby'),id('Auston Matthews')).length,0)});
+test('shortest cross-era route has verified links',()=>{const p=e.shortest(id('Gordie Howe'),id('Connor Bedard'));assert.equal(p.length-1,4);p.slice(1).forEach((x,i)=>assert.ok(e.evidence(p[i],x).length));assert.deepEqual(e.shortest(p[0],p[0]),[p[0]])});
+test('search tolerates accents',()=>assert.ok(e.search('jagr').some(p=>p.name.includes('Jarom'))));
+test('all scheduled puzzles have truthful par',()=>{for(const [a,b,par] of d.puzzles){assert.ok(par>=3&&par<=5);assert.equal(e.shortest(a,b).length-1,par)}});
+test('daily reset follows Eastern midnight',()=>{assert.equal(easternDate(new Date('2026-10-05T03:59:00Z')),'2026-10-04');assert.equal(easternDate(new Date('2026-10-05T04:00:00Z')),'2026-10-05');assert.deepEqual(puzzleFor(d,'2026-10-04'),puzzleFor(d,'2026-10-04'));assert.notDeepEqual(puzzleFor(d,'2026-10-04'),puzzleFor(d,'2026-10-05'))});
+test('streak stays active until today is missed',()=>{const wins={'2026-10-03':true,'2026-10-04':true};assert.equal(streakFor(wins,'2026-10-04'),2);assert.equal(streakFor(wins,'2026-10-05'),2);assert.equal(streakFor(wins,'2026-10-06'),0)});
