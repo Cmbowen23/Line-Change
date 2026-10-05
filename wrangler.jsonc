@@ -1,0 +1,5 @@
+{
+  "name": "line-change",
+  "compatibility_date": "2026-10-04",
+  "assets": { "directory": "./public" }
+}
