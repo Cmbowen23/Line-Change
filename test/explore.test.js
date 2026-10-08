@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {rosterFor,canAddPlayer} from '../public/explore.js';
+import {rosterFor,canAddPlayer,appendConnection} from '../public/explore.js';
 import {createEngine} from '../public/core.js';
 const data=JSON.parse(readFileSync(new URL('../public/data/hockey.json',import.meta.url)));
 const id=name=>Number(Object.keys(data.players).find(p=>data.players[p][0]===name));
@@ -28,4 +28,13 @@ test('longest-chain previews reject a next player that cannot finish without rep
  const engine=createEngine(graph);
  assert.equal(canAddPlayer(engine,[1,2],4,3,{longest:true}).allowed,false);
  assert.equal(canAddPlayer(engine,[1,2],4,4,{longest:true}).allowed,true);
+});
+
+test('shortest play auto-finishes and counts both shots; longest play stays open',()=>{
+ const engine=createEngine(data,[2020]),a=id('Claude Giroux'),b=id('Derick Brassard'),end=id('Connor McDavid'),route=[a];
+ assert.deepEqual(appendConnection(engine,route,b,end),[a,b,end]);
+ assert.deepEqual(appendConnection(engine,route,b,end,true),[a,b]);
+ assert.deepEqual(appendConnection(engine,[a,b],end,end),[a,b,end]);
+ assert.deepEqual(route,[a]);
+ assert.deepEqual(appendConnection(createEngine(data,[1990]),route,b,end),[a,b]);
 });

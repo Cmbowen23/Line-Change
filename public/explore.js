@@ -1,4 +1,9 @@
 export function seasonAllowed(season,decades){return decades.includes(Math.floor(Number(String(season).slice(0,4))/10)*10)}
+export function appendConnection(engine,route,id,end,longest=false){
+ const next=[...route,id];
+ if(!longest&&id!==end&&engine.evidence(id,end).length)next.push(end);
+ return next;
+}
 export function rosterFor(data,team,season,decades){
  if(!seasonAllowed(season,decades))return [];
  const ids=new Set(data.groups.filter(g=>g[0]===team&&Number(g[1])===Number(season)).flatMap(g=>g[2]));

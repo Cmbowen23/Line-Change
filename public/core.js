@@ -38,18 +38,21 @@ export function createEngine(data,decades=null){
  }
  const search=q=>{const needle=normalize(q).trim();if(!needle)return [];return Object.entries(data.players).filter(([id,p])=>memberships.has(Number(id))&&normalize(p[0]).includes(needle)).sort((a,b)=>Number(normalize(b[1][0]).startsWith(needle))-Number(normalize(a[1][0]).startsWith(needle))||a[1][0].localeCompare(b[1][0])).slice(0,12).map(([id,p])=>({id:Number(id),name:p[0],position:p[1],first:p[2],last:p[3]}))};
  const hintTeams=(a,b)=>{const path=shortest(a,b);return path&&path.length>1?[...new Set(evidence(a,path[1]).map(g=>g[0]))]:[]};
- function randomMatchup(random=Math.random,pool=null){
+ function randomMatchup(random=Math.random,pool=null,minShots=2){
   const eligible=pool===null?null:new Set(pool);
   const candidates=[...memberships.keys()].filter(p=>!eligible||eligible.has(p));
-  // Randomize starting players; explore each connected component at most once.
+  // Randomize starts and choose among available shot lengths for varied games.
   for(let i=candidates.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[candidates[i],candidates[j]]=[candidates[j],candidates[i]]}
   const visited=new Set();
   for(const a of candidates){
    if(visited.has(a))continue;
    const q=[a],distance=new Map([[a,0]]),groups=new Set();
    for(let i=0;i<q.length;i++){const p=q[i];visited.add(p);for(const gi of memberships.get(p)||[]){if(groups.has(gi))continue;groups.add(gi);for(const n of data.groups[gi][2])if(!distance.has(n)){distance.set(n,distance.get(p)+1);q.push(n)}}}
-   const reachable=q.filter(p=>p!==a&&(!eligible||eligible.has(p))),longer=reachable.filter(p=>distance.get(p)>=2),ends=longer.length?longer:reachable;
-   if(ends.length){const b=ends[Math.floor(random()*ends.length)];return {start:a,end:b,par:distance.get(b)}}
+   const reachable=q.filter(p=>p!==a&&(!eligible||eligible.has(p)));
+   // A start directly connected to every endpoint can still bridge a longer pair.
+   if(reachable.length)for(const p of q)visited.delete(p);
+   const byLength=new Map();for(const p of reachable){const shots=distance.get(p);if(shots<minShots)continue;if(!byLength.has(shots))byLength.set(shots,[]);byLength.get(shots).push(p)}
+   if(byLength.size){const lengths=[...byLength.keys()].sort((x,y)=>x-y),shots=lengths[Math.floor(random()*lengths.length)],ends=byLength.get(shots),b=ends[Math.floor(random()*ends.length)];return {start:a,end:b,par:shots}}
   }return null;
  }
  return {evidence,shortest,search,hintTeams,allShortest,randomMatchup};

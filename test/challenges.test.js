@@ -21,15 +21,16 @@ test('random matchups are distinct, reachable, and constrained to selected eras'
   const engine=createEngine(data,decades);
   for(const rng of [()=>0,()=>0.5,()=>0.9999]){
    const pair=engine.randomMatchup(rng);assert.ok(pair);assert.notEqual(pair.start,pair.end);
-   const path=engine.shortest(pair.start,pair.end);assert.equal(pair.par,path.length-1);
+   const path=engine.shortest(pair.start,pair.end);assert.equal(pair.par,path.length-1);assert.ok(pair.par>=2);
    for(let i=1;i<path.length;i++)assert.ok(engine.evidence(path[i-1],path[i]).every(g=>decades.includes(Math.floor(Number(String(g[1]).slice(0,4))/10)*10)));
   }
  }
  assert.equal(createEngine(data,[]).randomMatchup(),null);
 });
-test('random games skip isolated players and allow small teammate-only graphs',()=>{
+test('random games skip isolated players and reject teammate-only games by default',()=>{
  const tiny={players:{1:['A'],2:['B'],3:['C']},groups:[['X',20002001,[1]],['Y',20002001,[2,3]]]};
- const pair=createEngine(tiny).randomMatchup(()=>0.99);
+ assert.equal(createEngine(tiny).randomMatchup(()=>0.99),null);
+ const pair=createEngine(tiny).randomMatchup(()=>0.99,null,1);
  assert.deepEqual([pair.start,pair.end].sort(),[2,3]);assert.equal(pair.par,1);
 });
 
@@ -38,4 +39,12 @@ test('shared games preserve longest-chain style and reject unknown styles',()=>{
  const url=challengeURL('https://example.com/',pair.start,pair.end,[2020],'longest');
  assert.equal(parseChallenge(url,data).style,'longest');
  assert.throws(()=>parseChallenge(url.replace('style=longest','style=unknown'),data));
+});
+
+test('random games include longer shot lengths and try past an all-connected start',()=>{
+ const tiny={players:{1:['Center'],2:['Left'],3:['Right'],4:['Far'],5:['Farther']},groups:[['A',20202021,[1,2]],['B',20202021,[1,3]],['C',20202021,[3,4]],['D',20202021,[4,5]]]};
+ const engine=createEngine(tiny),pairs=[0,0.4,0.999].map(x=>engine.randomMatchup(()=>x));
+ assert.ok(pairs.every(p=>p.par>=2));assert.ok(pairs.some(p=>p.par>=3));
+ const star={players:{1:['Center'],2:['Left'],3:['Right']},groups:tiny.groups.slice(0,2)};
+ assert.equal(createEngine(star).randomMatchup(()=>0.999).par,2);
 });

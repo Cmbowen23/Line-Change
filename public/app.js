@@ -1,7 +1,7 @@
 import {createEngine,easternDate,puzzleFor,streakFor} from './core.js';
 import {allDecades,challengeURL,parseChallenge} from './challenges.js';
 import {portrait,teamLogo,connectionSentence,playerHistory,seasonRanges,difficultyPool,routePosition} from './presentation.js';
-import {rosterFor,canAddPlayer} from './explore.js';
+import {rosterFor,canAddPlayer,appendConnection} from './explore.js';
 const $=id=>document.getElementById(id);
 let data,engine,mode='daily',date=easternDate(),start,end,optimal,route=[],finished=false,revealed=false,selectedStart,selectedEnd,hintsUsed=0,hintedPlayers=new Set();
 let selectedDecades=allDecades;
@@ -34,8 +34,8 @@ function add(p){
  if(finished)return;if(route.includes(p)){status('That player is already in your chain.',true);return}
  if(!engine.evidence(route.at(-1),p).length){status(`${name(route.at(-1))} and ${name(p)} don’t share an NHL team-season. Try another player.`,true);return}
  if(longest()&&p!==end&&!engine.shortest(p,end,route)){status('That player leaves no route to the destination without repeating a player. Try a different connection.',true);return}
- route.push(p);$('player-search').value='';$('player-results').replaceChildren();
- if(p===end){finished=true;if(mode==='daily'){const wins=read('line-change-wins',{});wins[date]=true;write('line-change-wins',wins);showStreak()}}
+ route=appendConnection(engine,route,p,end,longest());$('player-search').value='';$('player-results').replaceChildren();
+ if(route.at(-1)===end){finished=true;if(mode==='daily'){const wins=read('line-change-wins',{});wins[date]=true;write('line-change-wins',wins);showStreak()}}
  save();render();status(finished?'Every link verified. Nice line change.':`Valid connection. ${proof(route.at(-2),p)}`);
 }
 function renderResult(){
@@ -96,7 +96,7 @@ function beginFree(a,b){
 }
 function randomFree(){
  const pair=engine.randomMatchup(Math.random,difficultyPool(data,difficulty));
- if(!pair){const message='No connected pair is available at this difficulty in those decades. Add decades or increase the difficulty.';$('setup-status').textContent=message;status(message,true);return}
+ if(!pair){const message='No matchup requiring at least two shots is available at this difficulty in those decades. Add decades or increase the difficulty.';$('setup-status').textContent=message;status(message,true);return}
  beginFree(pair.start,pair.end);
 }
 async function copyChallenge(url,feedback){
@@ -150,7 +150,7 @@ function renderExplorer(){
   $('explore-title').textContent=name(view.id);const profile=document.createElement('div');profile.className='explore-profile';profile.append(portrait(view.id,name(view.id)));
   const eligibility=canAddPlayer(engine,route,end,view.id,{finished,longest:longest()}),button=document.createElement('button');button.textContent=eligibility.allowed?(view.id===end?'Connect to destination':'Add to chain') :eligibility.reason;button.disabled=!eligibility.allowed;
   button.onclick=()=>{const before=route.length;add(view.id);if(route.length>before){closeExplorer();requestAnimationFrame(()=>{const player=$('chain').querySelector(`[data-player-id="${view.id}"]`);player?.querySelector('summary')?.focus();player?.scrollIntoView({behavior:'smooth',block:'center'})})}else renderExplorer()};profile.append(button);content.append(profile);
-  const note=document.createElement('p');note.className='explore-note';note.textContent=eligibility.allowed?`This player connects to ${name(route.at(-1))}. Adding them takes one shot.`:'You can keep exploring this career without adding a player.';content.append(note);
+  const note=document.createElement('p');note.className='explore-note';note.textContent=eligibility.allowed?(!longest()&&view.id!==end&&engine.evidence(view.id,end).length?`This player connects to ${name(route.at(-1))} and ${name(end)}. Add them to finish automatically; both connections count as shots.`:`This player connects to ${name(route.at(-1))}. Adding them takes one shot.`):'You can keep exploring this career without adding a player.';content.append(note);
   for(const record of playerHistory(data,view.id,selectedDecades)){
    const row=document.createElement('div');row.className='explore-career-team';const title=document.createElement('strong');title.textContent=data.teams[record.team]||record.team;row.append(teamLogo(record.team,title.textContent),title);content.append(row);
    const seasons=document.createElement('div');seasons.className='explore-seasons';for(const year of record.seasons){const allowed=record.allowed.includes(year),link=document.createElement(allowed?'button':'span');link.textContent=season(year);if(allowed){link.type='button';link.className='season-link';link.setAttribute('aria-label',`Explore ${title.textContent} ${season(year)} roster`);link.onclick=()=>visitExplorer({kind:'roster',team:record.team,year,query:''})}else link.className='outside-years';seasons.append(link)}content.append(seasons);
