@@ -25,3 +25,8 @@ export function difficultyPool(data,level){
  if(level==='medium')return Object.entries(data.playerDepth.regularSeasonGames).filter(([,games])=>games>=300).map(([id])=>Number(id));
  return null;
 }
+
+export function routePosition(index){
+ const row=Math.floor(index/3),offset=index%3;
+ return {row:row*2+1,column:row%2?5-offset*2:1+offset*2};
+}

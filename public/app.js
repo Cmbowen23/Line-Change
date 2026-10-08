@@ -1,6 +1,6 @@
 import {createEngine,easternDate,puzzleFor,streakFor} from './core.js';
 import {allDecades,challengeURL,parseChallenge} from './challenges.js';
-import {portrait,teamLogo,connectionSentence,playerHistory,seasonRanges,difficultyPool} from './presentation.js';
+import {portrait,teamLogo,connectionSentence,playerHistory,seasonRanges,difficultyPool,routePosition} from './presentation.js';
 const $=id=>document.getElementById(id);
 let data,engine,mode='daily',date=easternDate(),start,end,optimal,route=[],finished=false,revealed=false,selectedStart,selectedEnd,hintsUsed=0,hintedPlayers=new Set();
 let selectedDecades=allDecades;
@@ -19,7 +19,7 @@ function render(){
  $('hint-text').hidden=true;$('hint-text').textContent='';
  $('start-name').textContent=name(start);$('end-name').textContent=name(end);
  for(const [side,p] of [['start',start],['end',end]]){let slot=$(side+'-portrait');if(!slot){slot=document.createElement('div');slot.id=side+'-portrait';$(side+'-name').before(slot)}slot.replaceChildren(portrait(p,name(p)))}$('par').textContent=`PAR ${optimal} LINKS`;$('free-controls').hidden=mode!=='free';$('era-summary').textContent=mode==='free'?'Allowed seasons: '+selectedDecades.map(d=>d+'s').join(', '):'';
- $('chain').replaceChildren();route.forEach((p,i)=>{const li=document.createElement('li'),n=document.createElement('span'),body=document.createElement('div'),title=document.createElement('strong');n.className='number';n.textContent=i;title.textContent=name(p);body.append(title);if(i){const text=document.createElement('div');text.className='proof';text.textContent=proof(route[i-1],p);body.append(text)}else{const text=document.createElement('div');text.className='proof';text.textContent='Your starting line';body.append(text)}li.append(n,portrait(p,name(p)),body);$('chain').append(li)});
+ renderRoute();
  $('entry').hidden=finished;$('actions').hidden=finished;$('undo').disabled=route.length<2;$('give-up').disabled=false;$('player-search').disabled=false;
  $('hint').textContent=`Team hint${hintsUsed?` (${hintsUsed} used)`:''}`;
  const canFinish=!!engine.evidence(route.at(-1),end).length;$('connect').disabled=!canFinish;$('result').hidden=!finished;
@@ -36,21 +36,20 @@ function renderResult(){
  const el=$('result');el.replaceChildren();const heading=document.createElement('h2'),score=document.createElement('div'),desc=document.createElement('p');heading.textContent=revealed?'The shortest line.':route.length-1===optimal?'Top of the league.':'You’re connected.';score.className='score';score.textContent=`${route.length-1} LINKS · PAR ${optimal}`;desc.textContent=revealed?'Route revealed. This daily attempt won’t count toward your streak.':route.length-1===optimal?'You found a shortest possible route.':'A valid route. See if you can match par in free play.';el.append(heading,score,desc);const hintNote=document.createElement('p');hintNote.textContent=`${hintsUsed} team hint${hintsUsed===1?'':'s'} used`;el.append(hintNote);
  if(!revealed){const b=document.createElement('button');b.textContent='Share result';b.onclick=share;el.append(b)}
  if(mode==='free'){const b=document.createElement('button');b.className='secondary';b.textContent='Choose another matchup';b.style.marginLeft='8px';b.onclick=setupFree;el.append(b)}
- appendRouteExplanation(el);appendAllAnswers(el);
+ appendAllAnswers(el);
 }
-function appendRouteExplanation(parent){
- const section=document.createElement('section');section.className='route-explanation';
- const heading=document.createElement('h3');heading.textContent=revealed?'Revealed route evidence':'Your route, explained';section.append(heading);
- for(let i=0;i<route.length-1;i++){
-  const [team,year]=engine.evidence(route[i],route[i+1])[0];
-  const row=document.createElement('div');row.className='connection-explanation';
-  const player=(id)=>{const figure=document.createElement('figure'),caption=document.createElement('figcaption');figure.className='connection-player';caption.textContent=name(id);figure.append(portrait(id,name(id)),caption);return figure};
-  const arrow=document.createElement('span');arrow.className='connection-arrow';arrow.textContent='→';arrow.setAttribute('aria-hidden','true');
-  const detail=document.createElement('div');detail.className='connection-detail';
-  const text=document.createElement('p');text.textContent=connectionSentence({fromName:name(route[i]),toName:name(route[i+1]),teamName:data.teams[team]||team,season:season(year)});
-  detail.append(teamLogo(team,data.teams[team]||team),text);
-  row.append(player(route[i]),arrow,player(route[i+1]),detail);section.append(row);
- }parent.append(section);
+function renderRoute(){
+ const chain=$('chain');chain.className='route-chain';chain.setAttribute('aria-label',revealed?'Revealed route':'Your player chain');chain.replaceChildren();
+ for(let i=0;i<route.length;i++){
+  const id=route[i],position=routePosition(i),player=document.createElement('li'),caption=document.createElement('span');player.className='route-player';player.style.gridRow=position.row;player.style.gridColumn=position.column;caption.textContent=name(id);player.append(portrait(id,name(id)),caption);chain.append(player);
+  if(i===route.length-1)continue;
+  const next=routePosition(i+1),[team,year]=engine.evidence(id,route[i+1])[0],link=document.createElement('li');
+  const vertical=next.row!==position.row;link.className='route-link '+(vertical?'route-down':next.column<position.column?'route-left':'route-right');
+  link.style.gridRow=vertical?position.row+1:position.row;link.style.gridColumn=vertical?position.column:(position.column+next.column)/2;
+  const sentence=connectionSentence({fromName:name(id),toName:name(route[i+1]),teamName:data.teams[team]||team,season:season(year)});link.setAttribute('aria-label',sentence);link.title=sentence;
+  const line=document.createElement('span');line.className='route-line';line.setAttribute('aria-hidden','true');
+  const logo=teamLogo(team,data.teams[team]||team);const label=document.createElement('span');label.className='route-season';label.textContent=season(year);label.setAttribute('aria-hidden','true');link.append(line,logo,label);chain.append(link);
+ }
 }
 function appendAllAnswers(parent){
  const section=document.createElement('section');section.className='all-answers';
