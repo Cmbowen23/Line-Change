@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createSnake,randomSnake} from '../public/snake.js';
-import {snakeScore,matchesPosition} from '../public/modes.js';
+import {snakeScore,matchesPosition,playersFromEras} from '../public/modes.js';
 import {createEngine} from '../public/core.js';
 import {challengeURL,parseChallenge,allDecades} from '../public/challenges.js';
 import {difficultyPool} from '../public/presentation.js';
@@ -100,4 +100,20 @@ test('Open Ice finish and longest searches reject illegal team changes and disti
 test('Open Ice search keeps distinct histories when paths converge on the same player',()=>{
  const graph={players:tiny.players,groups:[['A',20102011,[1,2]],['B',20112012,[2,3]],['C',20102011,[1,5]],['D',20112012,[5,3]],['B',20122013,[3,4]]]};const game=createSnake(graph,[2010],'open'),c=game.context(1,4);
  const result=game.finish(c);assert.ok(game.validPath(c,result.path));assert.deepEqual(result.path.players,[1,5,3,4]);
+});
+
+test('random shortest endpoints come from selected eras but minimum shots are verified across all years',()=>{
+ const data={players:{1:['Start','C'],2:['Old bridge','D'],3:['End','C'],4:['Era teammate','R'],5:['Other era teammate','R']},groups:[['A',20102011,[1,4]],['B',20102011,[3,5]],['C',19901991,[1,2]],['D',19801981,[2,3]]]};
+ const pool=playersFromEras(data,[2010],[1,2,3]);assert.deepEqual(pool,[1,3]);assert.equal(createEngine(data,[2010]).randomMatchup(()=>.4,pool,2,4,'defense'),null);
+ const game=createEngine(data,allDecades),pair=game.randomMatchup(()=>.4,pool,2,4,'defense');assert.ok(pair);assert.equal(pair.par,2);assert.ok(pool.includes(pair.start)&&pool.includes(pair.end));assert.deepEqual(createEngine(data,allDecades,{position:'defense',start:pair.start,end:pair.end}).shortest(pair.start,pair.end).slice(1,-1),[2]);
+});
+
+test('the generation worker uses era-filtered endpoints with unrestricted Shortest Chain connection years',()=>{
+ const data={players:{1:['Start','C'],2:['Old bridge','D'],3:['End','C'],4:['Era teammate','R'],5:['Other era teammate','R']},groups:[['A',20102011,[1,4]],['B',20102011,[3,5]],['C',19901991,[1,2]],['D',19801981,[2,3]]]};
+ const messages=[],self={postMessage:message=>messages.push(message)},randomMath=Object.create(Math);randomMath.random=()=>.4;
+ const source=readFileSync(new URL('../public/solver-worker.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
+ new Function('createEngine','createSnake','randomSnake','allDecades','playersFromEras','self','Math',source)(createEngine,createSnake,randomSnake,allDecades,playersFromEras,self,randomMath);
+ self.onmessage({data:{type:'init',data}});self.onmessage({data:{id:1,type:'random',style:'shortest',decades:[2010],pool:[1,2,3],position:'defense'}});
+ const pair=messages[0].result;assert.ok(pair);assert.equal(pair.par,2);assert.ok([1,3].includes(pair.start)&&[1,3].includes(pair.end));
+ self.onmessage({data:{id:2,type:'random',style:'open',decades:[2010],pool:[1,3]}});assert.equal(messages[1].result,null);
 });

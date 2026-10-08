@@ -24,3 +24,10 @@ export function snakeScore(style,links){
  if(style==='road')return {value:new Set(links.map(g=>g[0])).size,unit:'teams'};
  return {value:links.length,unit:'shots'};
 }
+
+// Era selection chooses endpoints; Shortest Chain connections use all seasons.
+export function playersFromEras(data,decades,pool=null){
+ const allowed=new Set(decades),ids=new Set();
+ for(const group of data.groups)if(allowed.has(Math.floor(Number(String(group[1]).slice(0,4))/10)*10))for(const id of group[2])ids.add(id);
+ return pool===null?[...ids]:pool.filter(id=>ids.has(id));
+}

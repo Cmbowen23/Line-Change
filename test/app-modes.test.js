@@ -81,8 +81,17 @@ test('Career Run player history advances its bold years and greys out every earl
 
 test('every round prominently displays its active rules and clears restrictions when switching back to Daily',()=>{
  const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,2,3]],['B',20112012,[2,4]],['C',20112012,[3,4]]]};const ui=app();
- ui.configure(d,'shortest','goalie');ui.beginFree(1,4);assert.equal(ui.element('round-rules-title').textContent,'Goalies only');assert.equal(ui.element('round-target').textContent,'MINIMUM 2 SHOTS');assert.match(ui.element('round-rule-list').textContent,/Only goalies/);assert.match(ui.element('round-rule-list').textContent,/unrestricted/);assert.equal(ui.element('era-summary').textContent,'Allowed seasons: 2010s');
+ ui.configure(d,'shortest','goalie');ui.beginFree(1,4);assert.equal(ui.element('round-rules-title').textContent,'Goalies only');assert.equal(ui.element('round-target').textContent,'MINIMUM 2 SHOTS');assert.match(ui.element('round-rule-list').textContent,/Only goalies/);assert.match(ui.element('round-rule-list').textContent,/unrestricted/);assert.equal(ui.element('era-summary').textContent,'Matchup player eras: 2010s · All seasons allowed for connections.');
  ui.configure(d,'shortest','defense');ui.beginFree(1,4);assert.equal(ui.element('round-rules-title').textContent,'Defensemen only');assert.doesNotMatch(ui.element('round-rule-list').textContent,/goalies/);
  ui.configure(graph,'career');ui.beginFree(1,4);assert.match(ui.element('round-rule-list').textContent,/rookie season, 2010–11/);assert.match(ui.element('round-rule-list').textContent,/End in 2013–14/);assert.match(ui.element('round-rule-list').textContent,/dead end ends the round/);
  ui.daily();assert.equal(ui.element('round-rules-title').textContent,'Shortest chain');assert.match(ui.element('round-rule-list').textContent,/any NHL player/);assert.doesNotMatch(ui.element('round-rule-list').textContent,/rookie|defensemen|goalies/);assert.equal(ui.element('free-controls').hidden,true);
+});
+
+test('Shortest Chain era selection limits endpoints while old connections, histories and rosters remain playable',()=>{
+ const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,5]],['B',20102011,[4,6]],['C',19901991,[1,2]],['D',19801981,[2,4]]]};const ui=app();ui.configure(d,'shortest','defense');assert.equal(ui.beginFree(1,4),true);assert.equal(ui.element('round-target').textContent,'MINIMUM 2 SHOTS');
+ const details=new Element('details');ui.fillTeamDetails(details,1);assert.ok(details.querySelectorAll('*').some(x=>x.tagName==='button'&&x.textContent==='1990–91'));assert.equal(details.querySelectorAll('*').some(x=>x.className==='endpoint-years outside-years'),false);
+ ui.openExplorer({kind:'player',id:1});assert.ok(ui.element('explore-content').querySelectorAll('*').some(x=>x.tagName==='button'&&x.textContent==='1990–91'));
+ ui.add(2,['C',19901991]);assert.deepEqual(ui.state().route,[1,2,4]);assert.equal(ui.state().finished,true);
+ const other=app();other.configure(d,'shortest','defense');assert.equal(other.beginFree(2,4),false);
+ const snakeUI=app();snakeUI.configure(d,'open');assert.equal(snakeUI.beginFree(1,4),false);
 });

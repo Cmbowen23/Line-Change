@@ -2,14 +2,14 @@ import {createEngine,easternDate,puzzleFor,streakFor} from './core.js';
 import {allDecades,challengeURL,parseChallenge} from './challenges.js';
 import {portrait,teamLogo,connectionSentence,playerHistory,seasonRanges,difficultyPool,routePosition} from './presentation.js';
 import {rosterFor,canAddPlayer,appendConnection} from './explore.js';
-import {snakeStyles,positions,styleNames,positionNames,snakeRules,matchesPosition,snakeScore} from './modes.js';
+import {snakeStyles,positions,styleNames,positionNames,snakeRules,matchesPosition,snakeScore,playersFromEras} from './modes.js';
 import {createSnake} from './snake.js';
 const $=id=>document.getElementById(id);
 let data,engine,mode='daily',date=easternDate(),start,end,optimal,route=[],routeLinks=[],finished=false,revealed=false,selectedStart,selectedEnd,hintsUsed=0,hintedPlayers=new Set();
 let selectedDecades=allDecades;
 let exploreEnabled=read('line-change-explore',true)!==false,dailyExploreEnabled=read('line-change-daily-explore',true)!==false,exploreStack=[];
 const canExplore=()=>mode==='daily'?dailyExploreEnabled:exploreEnabled;
-const activeDecades=()=>mode==='daily'?allDecades:selectedDecades;
+const activeDecades=()=>mode==='daily'||gameStyle==='shortest'?allDecades:selectedDecades;
 let gameStyle=read('line-change-style','shortest');if(gameStyle==='longest')gameStyle='open';if(!['shortest',...snakeStyles].includes(gameStyle))gameStyle='shortest';
 let position=read('line-change-position','random');if(!['random',...positions].includes(position))position='random';
 let gamePosition='any',snake=null,lost=false,solving=false,revision=0,worker=null,workerId=0;const workerRequests=new Map();
@@ -18,7 +18,7 @@ const gameURL=()=>challengeURL(location.href,start,end,selectedDecades,gameStyle
 const snakeContext=()=>snake.context(start,end,route,routeLinks);
 function eligibility(id,connection=null){if(finished||solving)return {allowed:false,reason:solving?'Finding a route…':'Game complete'};if(longest())return snake.canAdd(snakeContext(),id,connection);if(id!==end&&!matchesPosition(data.players[id],gamePosition))return {allowed:false,reason:'This challenge requires '+positionNames[gamePosition]};return canAddPlayer(engine,route,end,id,{finished,connection})}
 function solve(type,request){if(!worker){worker=new Worker(new URL('./solver-worker.js',import.meta.url),{type:'module'});worker.postMessage({type:'init',data});worker.onmessage=e=>{const pending=workerRequests.get(e.data.id);if(!pending)return;workerRequests.delete(e.data.id);if(e.data.error)pending.reject(Error(e.data.error));else pending.resolve(e.data.result)};worker.onerror=()=>{for(const pending of workerRequests.values())pending.reject(Error('The route search could not finish. Please try again.'));workerRequests.clear();worker.terminate();worker=null}}const id=++workerId;return new Promise((resolve,reject)=>{workerRequests.set(id,{resolve,reject});worker.postMessage({id,type,...request})})}
-function renderSettings(){$('snake-description').hidden=!snakeStyles.includes(gameStyle);$('snake-description').textContent=snakeRules[gameStyle]||'';$('position-settings').hidden=gameStyle!=='shortest';$('random-description').textContent=gameStyle==='career'?'Random games pair an earlier rookie season with a later final recorded season, with a verified route between them.':snakeStyles.includes(gameStyle)?'Random games favor players with many connections. Each generated matchup has a verified finish.':'Each new game chooses a minimum of 2, 3, or 4 shots under its position rule. Unavailable lengths are skipped.'}
+function renderSettings(){$('era-title').textContent=gameStyle==='shortest'?'Which player eras?':'Which connection decades?';$('era-description').textContent=gameStyle==='shortest'?'Choose the eras for your starting and destination players. Connections, player search during play, and roster exploration can use every NHL season.':'Only connections from seasons starting in your selected decades count. Choose one or combine several.';$('snake-description').hidden=!snakeStyles.includes(gameStyle);$('snake-description').textContent=snakeRules[gameStyle]||'';$('position-settings').hidden=gameStyle!=='shortest';$('random-description').textContent=gameStyle==='career'?'Random games pair an earlier rookie season with a later final recorded season, with a verified route between them.':snakeStyles.includes(gameStyle)?'Random games favor players with many connections. Each generated matchup has a verified finish.':'Each new game chooses a minimum of 2, 3, or 4 shots under its position rule. Unavailable lengths are skipped.'}
 let difficulty=read('line-change-difficulty','easy'),showHistory=read('line-change-team-history',false)===true;
 if(!['easy','medium','hard'].includes(difficulty))difficulty='easy';
 const key=()=>`line-change-v1:${data.version}:${date}:${puzzleFor(data,date).slice(0,2).join('-')}`;
@@ -32,7 +32,7 @@ function showStreak(){$('streak').textContent=streakFor(read('line-change-wins',
 function proof(a,b){const e=longest()?[routeLinks.at(-1)]:engine.evidence(a,b);return e.length?`${data.teams[e[0][0]]||e[0][0]} · ${season(e[0][1])}${e.length>1?` · +${e.length-1} other team-seasons`:''}`:''}
 function render(){
  $('hint-text').hidden=true;$('hint-text').textContent='';
- $('par').textContent=longest()?(gameStyle==='career'?'SEASONS CROSSED':gameStyle==='road'?'TEAMS VISITED':'MOST SHOTS'):`MINIMUM ${optimal} SHOTS`;$('free-controls').hidden=mode!=='free';$('era-summary').textContent=mode==='free'?'Allowed seasons: '+selectedDecades.map(d=>d+'s').join(', '):'All NHL seasons count';
+ $('par').textContent=longest()?(gameStyle==='career'?'SEASONS CROSSED':gameStyle==='road'?'TEAMS VISITED':'MOST SHOTS'):`MINIMUM ${optimal} SHOTS`;$('free-controls').hidden=mode!=='free';$('era-summary').textContent=mode==='free'?(longest()?'Allowed seasons: ':'Matchup player eras: ')+selectedDecades.map(d=>d+'s').join(', ')+(longest()?'':' · All seasons allowed for connections.'):'All NHL seasons count';
  $('daily-controls').hidden=mode!=='daily';$('daily-explore-mode').checked=dailyExploreEnabled;$('explore-daily-current').hidden=!dailyExploreEnabled;
  $('explore-current').hidden=!canExplore();for(const id of ['roster-hint','player-hint'])$(id).hidden=!canExplore();
  const score=longest()?snakeScore(gameStyle,routeLinks):null;
@@ -52,7 +52,7 @@ function renderRoundRules(){
  }else{
   title={any:'Shortest chain',defense:'Defensemen only',goalie:'Goalies only',forward:'Forwards only'}[gamePosition];target=`MINIMUM ${optimal} SHOTS`;
   const positionRule={any:'Use any NHL player to connect your endpoints.',defense:'Only defensemen between the endpoints. Starting and destination players are unrestricted.',goalie:'Only goalies between the endpoints. Starting and destination players are unrestricted.',forward:'Only forwards between the endpoints. Starting and destination players are unrestricted.'}[gamePosition];
-  rules=[positionRule,'Each teammate connection takes one shot. Reach the destination in as few shots as possible; players cannot repeat.'];
+  rules=[positionRule,'Connections can use any NHL season. Each teammate connection takes one shot. Reach the destination in as few shots as possible; players cannot repeat.'];
  }
  $('round-rules-title').textContent=title;$('round-target').textContent=target;
  const list=$('round-rule-list');list.replaceChildren();for(const rule of rules){const item=document.createElement('li');item.textContent=rule;list.append(item)}
@@ -169,9 +169,10 @@ function updateCustomButtons(){const disabled=!selectedStart||!selectedEnd||sele
 function beginFree(a,b,restriction=null){
  closeExplorer();closeCompletion();revision++;solving=lost=false;
  gamePosition=snakeStyles.includes(gameStyle)?'any':restriction??(position==='random'?'any':position);
- engine=createEngine(data,selectedDecades,{position:gamePosition,start:a,end:b});snake=snakeStyles.includes(gameStyle)?createSnake(data,selectedDecades,gameStyle):null;
+ if(gameStyle==='shortest'){const eligible=new Set(playersFromEras(data,selectedDecades));if(!eligible.has(a)||!eligible.has(b)){$('setup-status').textContent='Choose starting and destination players who appeared in your selected eras.';return false}}
+ engine=createEngine(data,gameStyle==='shortest'?allDecades:selectedDecades,{position:gamePosition,start:a,end:b});snake=snakeStyles.includes(gameStyle)?createSnake(data,selectedDecades,gameStyle):null;
  const path=snake?snake.finish(snake.context(a,b)).path?.players:engine.shortest(a,b);
- if(!path||path.length<2){$('setup-status').textContent=snake?'No valid route was found under these Snake rules. Career Run needs both endpoint seasons in your selected decades. Try different players or eras.':'No route exists under this position rule in those decades. Choose another position, more decades, or different players.';return false}
+ if(!path||path.length<2){$('setup-status').textContent=snake?'No valid route was found under these Snake rules. Career Run needs both endpoint seasons in your selected decades. Try different players or eras.':'No route exists under this position rule. Choose another position or different players.';return false}
  mode='free';start=a;end=b;optimal=path.length-1;route=[start];routeLinks=[];finished=revealed=false;hintsUsed=0;hintedPlayers=new Set();
  $('daily').classList.remove('active');$('free').classList.add('active');$('setup').hidden=true;$('board').hidden=false;$('date').textContent=snake?styleNames[gameStyle].toUpperCase():'FREE PLAY · '+positionNames[gamePosition].toUpperCase();
  $('player-search').value='';$('player-results').replaceChildren();history.replaceState(null,'',gameURL());
@@ -189,7 +190,7 @@ async function randomFree(){
  }catch(error){if(generation===revision){$('setup-status').textContent=error.message;status(error.message,true)}}finally{$('random-free').disabled=!selectedDecades.length;$('random-again').disabled=false}
 }
 async function copyChallenge(url,feedback){
- try{await navigator.clipboard.writeText(url);feedback.textContent='Matchup link copied. Anyone with the link can play these players and decades.';return true}
+ try{await navigator.clipboard.writeText(url);feedback.textContent='Matchup link copied. Anyone with the link can play these players and rules.';return true}
  catch{feedback.textContent='Copy the matchup link below.';return false}
 }
 $('start-free').onclick=()=>{if(selectedStart&&selectedEnd&&selectedStart!==selectedEnd)beginFree(selectedStart,selectedEnd)};
@@ -197,7 +198,7 @@ $('share-custom').onclick=()=>{
  if(!selectedStart||!selectedEnd||selectedStart===selectedEnd)return;
  const restriction=snakeStyles.includes(gameStyle)?'any':position==='random'?'any':position;
  const customSnake=snakeStyles.includes(gameStyle)?createSnake(data,selectedDecades,gameStyle):null;
- const path=customSnake?customSnake.finish(customSnake.context(selectedStart,selectedEnd)).path:createEngine(data,selectedDecades,{position:restriction,start:selectedStart,end:selectedEnd}).shortest(selectedStart,selectedEnd);
+ const path=customSnake?customSnake.finish(customSnake.context(selectedStart,selectedEnd)).path:createEngine(data,allDecades,{position:restriction,start:selectedStart,end:selectedEnd}).shortest(selectedStart,selectedEnd);
  if(!path){$('setup-status').textContent='No route exists for these players under the selected rules. Try different players or decades.';return}
  $('challenge-link').value=challengeURL(location.href,selectedStart,selectedEnd,selectedDecades,gameStyle,restriction);$('challenge-link-box').hidden=false;$('challenge-feedback').textContent='Your matchup is ready to share.';
 };
@@ -237,7 +238,7 @@ function fillTeamDetails(details,id){
    const allowed=document.createElement('div');allowed.className='endpoint-years';if(canExplore()){for(const year of record.allowed){const button=document.createElement('button');button.type='button';button.className='season-link';button.textContent=season(year);button.disabled=!seasonExploreAllowed(year);button.setAttribute('aria-label',`Explore ${data.teams[record.team]||record.team} ${season(year)} roster`);button.onclick=()=>openExplorer({kind:'roster',team:record.team,year,query:''});allowed.append(button)}}else{const text=document.createElement('strong');text.textContent=seasonRanges(record.allowed);allowed.append(text)}if(record.allowed.length)row.append(allowed);
    const outside=record.seasons.filter(s=>!record.allowed.includes(s));if(outside.length){const rest=document.createElement('span');rest.className='endpoint-years outside-years';rest.textContent=seasonRanges(outside);row.append(rest)}details.append(row);
   }
-  const note=document.createElement('small');note.textContent=canExplore()?'Tap a bold season to explore its roster. Grey seasons cannot be used for your next shot.':'Bold teams and seasons count in this game.';details.append(note);
+  const note=document.createElement('small');note.textContent=canExplore()?(longest()?'Tap a bold season to explore its roster. Grey seasons cannot be used for your next shot.':'All seasons are available. Tap a season to explore its roster.'):(longest()?'Bold teams and seasons count in this game.':'All NHL seasons count in this game.');details.append(note);
 }
 function closeExplorer(){if($('explorer').open)$('explorer').close();exploreStack=[];}
 function openExplorer(view){if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;exploreStack=[view];renderExplorer();if(!$('explorer').open)$('explorer').showModal();}
