@@ -90,7 +90,7 @@ function beginFree(a,b){
 }
 function randomFree(){
  const pair=engine.randomMatchup(Math.random,difficultyPool(data,difficulty));
- if(!pair){$('setup-status').textContent='No connected pair is available at this difficulty in those decades. Add decades or increase the difficulty.';return}
+ if(!pair){const message='No connected pair is available at this difficulty in those decades. Add decades or increase the difficulty.';$('setup-status').textContent=message;status(message,true);return}
  beginFree(pair.start,pair.end);
 }
 async function copyChallenge(url,feedback){
