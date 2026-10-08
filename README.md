@@ -64,3 +64,5 @@ Career Run makes only the rookie season clickable before the first shot, then on
 Career Run histories follow the current chain season: only later eligible years remain bold/clickable; earlier years and teams without a remaining eligible season are greyed out. Inline history states the current season to continue after.
 
 Typography uses bundled Bungee for jersey-style display headings and Barlow for readable player names, controls, and career histories. Font licenses are included under `public/fonts/`; no external font requests are required.
+
+Every round displays its active position/Snake rules, objective, minimum shots (Shortest Chain), and allowed eras in a highlighted panel above the player chain. Free-play new-game, restart, share and matchup controls sit below the play box.
