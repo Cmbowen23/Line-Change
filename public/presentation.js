@@ -10,9 +10,10 @@ export function teamLogo(code,name){
  const img=document.createElement('img');img.alt='';img.loading='lazy';img.decoding='async';img.referrerPolicy='no-referrer';img.src=`https://assets.nhle.com/logos/nhl/svg/${code}_light.svg`;img.onerror=()=>img.remove();img.onload=()=>{span.replaceChildren(img)};span.append(img);return span;
 }
 
+const historyCache=new WeakMap();
 export function playerHistory(data,id,decades){
- const teams=new Map();
- for(const [team,season,players] of data.groups){if(!players.includes(id))continue;if(!teams.has(team))teams.set(team,new Set());teams.get(team).add(season)}
+ if(!historyCache.has(data)){const all=new Map();for(const [team,season,players] of data.groups)for(const player of players){if(!all.has(player))all.set(player,new Map());const history=all.get(player);if(!history.has(team))history.set(team,new Set());history.get(team).add(season)}historyCache.set(data,all)}
+ const teams=historyCache.get(data).get(id)||new Map();
  return [...teams].map(([team,seasons])=>({team,seasons:[...seasons].sort((a,b)=>a-b),allowed:[...seasons].filter(s=>decades.includes(Math.floor(Number(String(s).slice(0,4))/10)*10)).sort((a,b)=>a-b)})).sort((a,b)=>a.seasons[0]-b.seasons[0]);
 }
 export function seasonRanges(seasons){

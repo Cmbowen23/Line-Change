@@ -1,0 +1,53 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import * as core from '../public/core.js';
+import * as challenges from '../public/challenges.js';
+import * as presentation from '../public/presentation.js';
+import * as explore from '../public/explore.js';
+import * as modes from '../public/modes.js';
+import {createSnake} from '../public/snake.js';
+
+// A small DOM double exercises the actual app handlers without a browser,
+// network access, or changing anyone's saved daily attempt.
+class Element{
+ constructor(tag='div'){this.tagName=tag;this.children=[];this.dataset={};this.style={};this.open=false;this.hidden=false;this.value='';this._text='';this.isConnected=true;this.listeners={};this.classList={add(){},remove(){},toggle(){}}}
+ set textContent(value){this._text=String(value);this.children=[]}
+ get textContent(){return this._text+this.children.map(x=>typeof x==='string'?x:x.textContent).join('')}
+ append(...items){this.children.push(...items)}
+ replaceChildren(...items){this._text='';this.children=items}
+ setAttribute(key,value){this[key]=value}
+ addEventListener(type,fn){this.listeners[type]=fn}
+ showModal(){this.open=true}
+ close(){this.open=false;this.listeners.close?.()}
+ querySelectorAll(selector){const all=this.children.filter(x=>typeof x!=='string').flatMap(x=>[x,...x.querySelectorAll('*')]);return selector==='*'?all:selector==='.chain-teams[open]'?all.filter(x=>x.className?.includes('chain-teams')&&x.open):[]}
+ querySelector(){return null}
+ focus(){}
+ select(){}
+}
+function app(){
+ const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8'),elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(x=>[x[1],new Element()]));
+ const document={getElementById:id=>{assert.ok(elements.has(id),'Missing HTML element '+id);return elements.get(id)},createElement:tag=>new Element(tag),createTextNode:text=>text,addEventListener(){}};
+ const storage=new Map(),location={href:'https://example.com/',origin:'https://example.com'},localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
+ class Worker{
+  postMessage(request){if(request.type==='init'){this.data=request.data;return}queueMicrotask(()=>{const game=createSnake(this.data,request.decades,request.style);this.onmessage?.({data:{id:request.id,result:game.longest(game.context(request.start,request.end,request.route,request.links),{seedPath:request.seedPath,budgetMs:20})}})})}
+  terminate(){}
+ }
+ const bindings={...core,...challenges,...presentation,...explore,...modes,createSnake,document,localStorage,location,history:{replaceState(){}},Worker,URL,confirm:()=>true,navigator:{},setTimeout:()=>0,clearTimeout(){},requestAnimationFrame:fn=>fn(),portrait:()=>new Element('span'),teamLogo:()=>new Element('span')};
+ const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.url/g,"'https://example.com/app.js'").replace(/load\(\);document\.addEventListener\('visibilitychange',[\s\S]*$/,'');
+ const api=new Function(...Object.keys(bindings),source+`;return {beginFree,add,daily,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition}},element:id=>$(id)};`)(...Object.values(bindings));return api;
+}
+const graph={version:'test',teams:{A:'Team A',B:'Team B',C:'Team C',D:'Team D'},puzzles:[[1,4,3]],players:{1:['Start','C',20102011,20102011],2:['Bridge','D',20102011,20122013],3:['Next','G',20122013,20132014],4:['End','C',20132014,20132014],5:['Trap','D',20102011,20142015],6:['Other','R',20142015,20142015]},groups:[['A',20102011,[1,2,5]],['B',20122013,[2,3]],['C',20132014,[3,4]],['D',20142015,[5,6]]]};
+test('Career Run app ends a dead run, shows restart, blocks undo, and resets the same matchup',()=>{
+ const ui=app();ui.configure(graph,'career');assert.equal(ui.beginFree(1,4),true);assert.equal(ui.element('undo').hidden,true);
+ ui.element('close-intro').onclick();ui.add(5,['A',20102011]);assert.equal(ui.state().lost,true);assert.equal(ui.state().finished,true);assert.equal(ui.element('completion').open,true);assert.equal(ui.element('completion-title').textContent,'Run over.');assert.equal(ui.element('completion-restart').hidden,false);assert.equal(ui.element('completion-share').hidden,true);
+ ui.element('completion-restart').onclick();assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().lost,false);assert.equal(ui.element('completion').open,false);
+ ui.add(2,['A',20102011]);ui.element('undo').onclick();assert.deepEqual(ui.state().route,[1,2]);ui.add(3,['B',20122013]);assert.equal(ui.state().finished,false);ui.add(4,['C',20132014]);assert.equal(ui.element('completion-title').textContent,'You’re connected!');assert.equal(ui.element('completion-shots').textContent,'3 seasons');assert.equal(ui.state().lost,false);
+});
+test('Open Ice app leaves a close-to-end chain open, counts shots, and labels its answer correctly',async()=>{
+ const ui=app();ui.configure(graph,'open');assert.equal(ui.beginFree(1,4),true);ui.element('close-intro').onclick();ui.add(2);ui.add(3);assert.equal(ui.state().finished,false);assert.equal(ui.element('give-up').textContent,'Reveal longest route');assert.equal(ui.element('par').textContent,'MOST SHOTS');assert.ok(ui.element('chain').children.some(x=>x.dataset.playerId===3));ui.add(4);assert.equal(ui.state().finished,true);assert.equal(ui.element('completion-shots').textContent,'3 shots');await Promise.resolve();
+});
+test('Shortest Chain app enforces restricted bridges, auto-finishes, and Daily restores Open Roster',()=>{
+ const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,2,3]],['B',20112012,[2,4]],['C',20112012,[3,4]]]};
+ const ui=app();ui.configure(d,'shortest','goalie');assert.equal(ui.beginFree(1,4),true);ui.element('close-intro').onclick();ui.add(2);assert.deepEqual(ui.state().route,[1]);ui.add(3);assert.deepEqual(ui.state().route,[1,3,4]);assert.equal(ui.state().finished,true);assert.equal(ui.element('completion-shots').textContent,'2 shots');ui.daily();assert.equal(ui.state().gamePosition,'any');assert.equal(ui.element('give-up').textContent,'Reveal shortest route');
+});

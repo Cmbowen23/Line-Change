@@ -1,5 +1,7 @@
+import {matchesPosition} from './modes.js';
 export const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,'');
-export function createEngine(data,decades=null){
+export function createEngine(data,decades=null,{position='any',start=null,end=null}={}){
+ if(position!=='any')data={...data,groups:data.groups.map(g=>[g[0],g[1],g[2].filter(id=>id===start||id===end||matchesPosition(data.players[id],position))])};
  const memberships=new Map();
  const allowed=decades===null?null:new Set(decades);
  data.groups.forEach((g,i)=>{if(allowed&&!allowed.has(Math.floor(Number(String(g[1]).slice(0,4))/10)*10))return;g[2].forEach(p=>{if(!memberships.has(p))memberships.set(p,[]);memberships.get(p).push(i)})});
@@ -83,11 +85,11 @@ export function createEngine(data,decades=null){
  const search=q=>{const needle=normalize(q).trim();if(!needle)return [];return Object.entries(data.players).filter(([id,p])=>memberships.has(Number(id))&&normalize(p[0]).includes(needle)).sort((a,b)=>Number(normalize(b[1][0]).startsWith(needle))-Number(normalize(a[1][0]).startsWith(needle))||a[1][0].localeCompare(b[1][0])).slice(0,12).map(([id,p])=>({id:Number(id),name:p[0],position:p[1],first:p[2],last:p[3]}))};
  const hintTeams=(a,b)=>{const path=shortest(a,b);return path&&path.length>1?[...new Set(evidence(a,path[1]).map(g=>g[0]))]:[]};
  const randomAvailability=new Map();
- function randomMatchup(random=Math.random,pool=null,minShots=2,maxShots=4){
+ function randomMatchup(random=Math.random,pool=null,minShots=2,maxShots=4,restriction='any'){
   if(!Number.isInteger(minShots)||!Number.isInteger(maxShots)||minShots<1||maxShots<minShots)return null;
   const eligible=pool===null?null:new Set(pool);
   const candidates=[...memberships.keys()].filter(p=>!eligible||eligible.has(p));
-  const cacheKey=`${minShots}:${maxShots}:${candidates.join(',')}`;
+  const cacheKey=`${restriction}:${minShots}:${maxShots}:${candidates.join(',')}`;
   const lengths=randomAvailability.get(cacheKey)||Array.from({length:maxShots-minShots+1},(_,i)=>minShots+i);
   if(!lengths.length)return null;
   // Choose the shot count first so shorter routes do not dominate the mix.
@@ -97,7 +99,7 @@ export function createEngine(data,decades=null){
   for(const a of candidates){
    if(visited.has(a))continue;
    const q=[a],distance=new Map([[a,0]]),groups=new Set();
-   for(let i=0;i<q.length;i++){const p=q[i];visited.add(p);if(distance.get(p)>=maxShots)continue;for(const gi of memberships.get(p)||[]){if(groups.has(gi))continue;groups.add(gi);for(const n of data.groups[gi][2])if(!distance.has(n)){distance.set(n,distance.get(p)+1);q.push(n)}}}
+   for(let i=0;i<q.length;i++){const p=q[i];visited.add(p);if(distance.get(p)>=maxShots||(p!==a&&!matchesPosition(data.players[p],restriction)))continue;for(const gi of memberships.get(p)||[]){if(groups.has(gi))continue;groups.add(gi);for(const n of data.groups[gi][2])if(!distance.has(n)){distance.set(n,distance.get(p)+1);q.push(n)}}}
    const reachable=q.filter(p=>p!==a&&(!eligible||eligible.has(p)));
    if(reachable.length)for(const p of q)visited.delete(p);
    const byLength=new Map();for(const p of reachable){const shots=distance.get(p);if(shots<minShots||shots>maxShots)continue;if(!byLength.has(shots))byLength.set(shots,[]);byLength.get(shots).push(p)}
