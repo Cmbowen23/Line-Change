@@ -123,11 +123,20 @@ test('shot scoring charges additions rather than the automatic destination conne
  assert.equal(minimumShots(2),1);assert.equal(minimumShots(3),2);assert.equal(shotLabel(1),'1 shot');assert.equal(shotLabel(2),'2 shots');
 });
 
-test('real random Shortest Chain games require two to four player additions under each position rule',()=>{
+test('real random Shortest Chain games require one to four player additions under each position rule',()=>{
  let seed=47;const rng=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/2**32),pool=playersFromEras(real,[2000,2010,2020],difficultyPool(real,'easy'));
  for(const position of ['any','defense','goalie','forward']){
-  const pair=createEngine(real,allDecades).randomMatchup(rng,pool,3,5,position);assert.ok(pair,position);
+  const pair=createEngine(real,allDecades).randomMatchup(rng,pool,2,5,position);assert.ok(pair,position);
   const path=createEngine(real,allDecades,{position,start:pair.start,end:pair.end}).shortest(pair.start,pair.end),shots=minimumShots(pair.par);
-  assert.equal(shortestShots(path,pair.end),shots);assert.ok(shots>=2&&shots<=4,position);assert.equal(path.length-2,shots);
+  assert.equal(shortestShots(path,pair.end),shots);assert.ok(shots>=1&&shots<=4,position);assert.equal(path.length-2,shots);
  }
+});
+
+test('the generation worker includes matchups solved by a single player addition',()=>{
+ const data={players:{1:['Start','C'],2:['Bridge','D'],3:['End','C']},groups:[['A',20102011,[1,2]],['B',20112012,[2,3]]]};
+ const messages=[],self={postMessage:message=>messages.push(message)},randomMath=Object.create(Math);randomMath.random=()=>.4;
+ const source=readFileSync(new URL('../public/solver-worker.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
+ new Function('createEngine','createSnake','randomSnake','allDecades','playersFromEras','minimumShots','self','Math',source)(createEngine,createSnake,randomSnake,allDecades,playersFromEras,minimumShots,self,randomMath);
+ self.onmessage({data:{type:'init',data}});self.onmessage({data:{id:1,type:'random',style:'shortest',decades:[2010],pool:[1,3],position:'defense'}});
+ const pair=messages[0].result;assert.ok(pair);assert.equal(pair.par,1);assert.ok([1,3].includes(pair.start)&&[1,3].includes(pair.end));
 });

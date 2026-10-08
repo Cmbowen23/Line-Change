@@ -8,7 +8,7 @@ self.onmessage=event=>{
  try{
   if(type==='init'){data=request.data;return}
   if(type==='random'){
-   const result=request.style==='shortest'?createEngine(data,allDecades).randomMatchup(Math.random,playersFromEras(data,request.decades,request.pool),3,5,request.position):randomSnake(data,request.decades,request.style,request.pool);
+   const result=request.style==='shortest'?createEngine(data,allDecades).randomMatchup(Math.random,playersFromEras(data,request.decades,request.pool),2,5,request.position):randomSnake(data,request.decades,request.style,request.pool);
    if(result&&request.style==='shortest')result.par=minimumShots(result.par);
    self.postMessage({id,result});return;
   }

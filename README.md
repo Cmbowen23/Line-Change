@@ -44,7 +44,7 @@ Daily and Shortest Chain count each player added as one shot; the automatic dest
 
 Explore mode in free play makes eligible season labels and route players clickable. A dialog supports exact team-season rosters, accent-insensitive roster search, player career previews, and Back navigation. Browsing does not alter the chain or shot count. Add to chain uses current-player eligibility, duplicate checks and longest-mode reachability. Roster and Player hints count once per current player and hint type; previews do not add a player automatically. In Shortest Chain every historical season can be explored. In Snake, seasons outside selected decades remain visible but are not browse links.
 
-Shortest-chain additions now automatically append a valid destination connection, counting the selected player as one shot and the automatic destination edge as zero. Longest Chain continues until the destination is explicitly selected. Random matchups require at least two player additions (three teammate connections) and sample across available shortest-distance lengths, so longer games are included where era and difficulty filters allow.
+Shortest-chain additions now automatically append a valid destination connection, counting the selected player as one shot and the automatic destination edge as zero. Longest Chain continues until the destination is explicitly selected. Random matchups require at least one player addition (two teammate connections) and sample across available shortest-distance lengths, so longer games are included where era and difficulty filters allow.
 
 
 ## Snake and position challenges
@@ -55,7 +55,7 @@ Free play offers Shortest Chain and three Snake styles. Easy/Medium/Hard continu
 - **Career Run:** first connection in the starting player's first recorded NHL season; every next connection uses a strictly later season; finish in the destination's final recorded season. Active players use the dataset's latest recorded season. Score counts linked seasons with the calendar span shown separately. Locally valid risky moves are allowed; a proven dead end ends the run, with restart and no undo.
 - **Road Trip:** unique players and unique teams across the full chain, including across different seasons. Score counts teams visited.
 
-Random Shortest Chain games select a 2–4-shot minimum under an intermediate-player position rule: anyone, defensemen, goalies, or forwards. Endpoints are unrestricted. Unsupported lengths/rules are rerolled. Custom matchups with Random selected use Open Roster. Search, add eligibility, hints, minimum shots, alternative answers, and share links all use the active restriction. Daily games retain Open Roster.
+Random Shortest Chain games select a 1–4-shot minimum under an intermediate-player position rule: anyone, defensemen, goalies, or forwards. Endpoints are unrestricted. Unsupported lengths/rules are rerolled. Custom matchups with Random selected use Open Roster. Search, add eligibility, hints, minimum shots, alternative answers, and share links all use the active restriction. Daily games retain Open Roster.
 
 Snake generation and answer searches run in a module worker to keep the page responsive. Bounded longest-path searches return a valid, evidence-backed longest route found, with an explicit caveat if optimality is unproven. They never claim the absolute longest unless exhaustive search or a valid upper bound proves it. Reveal preserves the played prefix. Existing `style=longest` links open Snake: Open Ice.
 
