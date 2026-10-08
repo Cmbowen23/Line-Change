@@ -62,3 +62,5 @@ Snake generation and answer searches run in a module worker to keep the page res
 Career Run makes only the rookie season clickable before the first shot, then only later seasons up to the destination’s final recorded season. The sticky discovery header keeps both endpoints and required years visible, along with the next-shot requirement.
 
 Career Run histories follow the current chain season: only later eligible years remain bold/clickable; earlier years and teams without a remaining eligible season are greyed out. Inline history states the current season to continue after.
+
+Typography uses bundled Bungee for jersey-style display headings and Barlow for readable player names, controls, and career histories. Font licenses are included under `public/fonts/`; no external font requests are required.
