@@ -31,3 +31,9 @@ The browser uses a compact player/team-season graph; evidence and BFS paths are 
 Cloudflare documentation: https://developers.cloudflare.com/workers/static-assets/
 
 Free play supports any combination of decades, based on season start year. Only team-season records in selected decades can prove a link, and only players with appearances in those decades appear in search. A 1989–90 season counts as the 1980s. Disconnected matchups display a message instead of starting an impossible game. Daily play remains unrestricted. Team hints show all team names shared with the next player on one shortest route; player names are not revealed. Each distinct current player hinted counts once per attempt, persists for daily games, and appears in shared scores.
+
+## Completion answers and images
+
+Completed and revealed games show team-season sentences for the displayed route. Successful completions label these as the user’s own route; reveals are labeled separately. A shortest-path DAG counts all shortest player chains exactly using BigInt and enumerates them lazily, with 20 answers per click and no answer-count cap. Longer detours and duplicate team-season variants are excluded. Decade filters apply to all evidence and alternative routes.
+
+Player portraits use https://assets.nhle.com/mugs/nhl/latest/{playerId}.png and team logos use https://assets.nhle.com/logos/nhl/svg/{teamCode}_light.svg. These external NHL assets are loaded only for displayed players/teams. Missing assets fall back to player initials and team abbreviations; historical assets are not guaranteed. Image requests omit referrers. Logos reflect the NHL asset for a team code, not necessarily the exact season’s historical design. CSP permits images only from self, data URLs and assets.nhle.com.
