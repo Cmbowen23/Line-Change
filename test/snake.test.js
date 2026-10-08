@@ -83,3 +83,21 @@ test('real position matchups have truthful restricted two-to-four-shot minima',(
   const engine=createEngine(real,[2020],{position,start:pair.start,end:pair.end}),path=engine.shortest(pair.start,pair.end);assert.equal(path.length-1,pair.par);assert.ok(pair.par>=2&&pair.par<=4);assert.ok(path.slice(1,-1).every(id=>matchesPosition(real.players[id],position)));
  }
 });
+
+test('Open Ice applies team and season limits globally and requires a different team every shot',()=>{
+ const graph={players:tiny.players,groups:[['A',20132014,[3,4]],['B',20132014,[3,4]],['C',20102011,[3,4]]]};const game=createSnake(graph,[2010],'open');
+ assert.equal(game.canAdd(game.context(1,4,[1,2,3],[['B',20102011],['A',20112012]]),4,['A',20132014]).allowed,false);
+ assert.equal(game.canAdd(game.context(1,4,[1,2,3],[['A',20102011],['B',20122013],['A',20112012],['C',20122013]]),4,['A',20132014]).allowed,false);
+ assert.equal(game.canAdd(game.context(1,4,[1,2,3],[['D',20102011],['E',20112012],['F',20102011],['G',20102011]]),4,['C',20102011]).allowed,false);
+ const c=game.context(1,4,[1,2,3],[['A',20102011],['B',20122013]]);assert.equal(game.canAdd(c,4,['A',20132014]).allowed,true);
+});
+test('Open Ice finish and longest searches reject illegal team changes and distinguish bounded searches from dead ends',()=>{
+ const graph={players:tiny.players,groups:[['A',20102011,[1,2]],['A',20112012,[2,4]],['B',20122013,[2,3]],['C',20132014,[3,4]]]};const game=createSnake(graph,[2010],'open'),c=game.context(1,4);
+ const finish=game.finish(c);assert.ok(game.validPath(c,finish.path));assert.deepEqual(finish.path.players,[1,2,3,4]);assert.equal(game.finish(c,{maxStates:0}).exhausted,false);
+ const result=game.longest(c);assert.ok(game.validPath(c,result.path));assert.deepEqual(result.path.players,[1,2,3,4]);
+ const trap=createSnake({...graph,groups:graph.groups.slice(0,2)},[2010],'open');assert.deepEqual(trap.finish(trap.context(1,4)),{path:null,exhausted:true});assert.equal(trap.canAdd(trap.context(1,4),2).allowed,true);
+});
+test('Open Ice search keeps distinct histories when paths converge on the same player',()=>{
+ const graph={players:tiny.players,groups:[['A',20102011,[1,2]],['B',20112012,[2,3]],['C',20102011,[1,5]],['D',20112012,[5,3]],['B',20122013,[3,4]]]};const game=createSnake(graph,[2010],'open'),c=game.context(1,4);
+ const result=game.finish(c);assert.ok(game.validPath(c,result.path));assert.deepEqual(result.path.players,[1,5,3,4]);
+});

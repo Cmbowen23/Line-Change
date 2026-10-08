@@ -40,7 +40,7 @@ Player portraits use https://assets.nhle.com/mugs/nhl/latest/{playerId}.png and 
 
 Free-play random endpoints default to Easy (the curated daily star list). Medium uses at least 300 career NHL regular-season appearances; Hard includes everyone. Endpoints must appear in the chosen decades and have a reachable route. Intermediate players are not restricted by difficulty. These tiers are not season scoring rankings. Career counts are rebuilt from existing source CSVs with `python3 scripts/build-depth.py`. Optional endpoint team histories show full careers and mark seasons allowed by the selected decades.
 
-The UI counts each valid connection as a shot and shows the BFS minimum shots. Free-play histories now expand beneath each endpoint; relevant teams and seasons are bold. Free play supports Shortest Chain and Longest Chain; longest games reward more unique players before reaching the destination. Every move must leave an unused-player route to the endpoint. Repeats are disallowed, undo remains available, and sharing preserves the style. No theoretical maximum longest path is claimed.
+The UI counts each valid connection as a shot and shows the BFS minimum shots. Free-play histories now expand beneath each endpoint; relevant teams and seasons are bold. Free play supports Shortest Chain and Longest Chain; longest games reward more unique players before reaching the destination. Repeats are disallowed and sharing preserves the style. Open Ice and Career Run allow risky moves and end the round on a proven dead end, without undo; Road Trip protects a finish. No theoretical maximum longest path is claimed.
 
 Explore mode in free play makes eligible season labels and route players clickable. A dialog supports exact team-season rosters, accent-insensitive roster search, player career previews, and Back navigation. Browsing does not alter the chain or shot count. Add to chain uses current-player eligibility, duplicate checks and longest-mode reachability. Roster and Player hints count once per current player and hint type; previews do not add a player automatically. Historical seasons outside selected decades remain visible but are not browse links.
 
@@ -51,10 +51,12 @@ Shortest-chain additions now automatically append a valid destination connection
 
 Free play offers Shortest Chain and three Snake styles. Easy/Medium/Hard continues to control endpoint familiarity, independently of style.
 
-- **Open Ice:** longest chain, unique players and unique team-seasons across the full chain; years may move in either direction.
+- **Open Ice:** longest chain across any selected years; change teams every shot, max two uses per team (different seasons), max three uses per season across the whole chain. Unique players and team-seasons. Risky moves are allowed; a proven dead end ends the round, with restart and no undo. A history-aware search checks finishes in the worker.
 - **Career Run:** first connection in the starting player's first recorded NHL season; every next connection uses a strictly later season; finish in the destination's final recorded season. Active players use the dataset's latest recorded season. Score counts linked seasons with the calendar span shown separately. Locally valid risky moves are allowed; a proven dead end ends the run, with restart and no undo.
 - **Road Trip:** unique players and unique teams across the full chain, including across different seasons. Score counts teams visited.
 
 Random Shortest Chain games select a 2–4-shot minimum under an intermediate-player position rule: anyone, defensemen, goalies, or forwards. Endpoints are unrestricted. Unsupported lengths/rules are rerolled. Custom matchups with Random selected use Open Roster. Search, add eligibility, hints, minimum shots, alternative answers, and share links all use the active restriction. Daily games retain Open Roster.
 
 Snake generation and answer searches run in a module worker to keep the page responsive. Bounded longest-path searches return a valid, evidence-backed longest route found, with an explicit caveat if optimality is unproven. They never claim the absolute longest unless exhaustive search or a valid upper bound proves it. Reveal preserves the played prefix. Existing `style=longest` links open Snake: Open Ice.
+
+Career Run makes only the rookie season clickable before the first shot, then only later seasons up to the destination’s final recorded season. The sticky discovery header keeps both endpoints and required years visible, along with the next-shot requirement.

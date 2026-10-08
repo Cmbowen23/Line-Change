@@ -1,6 +1,6 @@
 
 // Every search result carries the team-season for each link. Career searches
-// are chronological; Open Ice uses BFS; Road Trip tracks teams in each state.
+// are chronological; Open Ice tracks full history; Road Trip tracks used teams.
 export function createSnake(data,decades,style='open'){
  const allowed=new Set(decades),groups=data.groups.filter(g=>allowed.has(Math.floor(Number(String(g[1]).slice(0,4))/10)*10));
  const memberships=new Map();groups.forEach((g,i)=>g[2].forEach(p=>{if(!memberships.has(p))memberships.set(p,[]);memberships.get(p).push(i)}));
@@ -8,8 +8,9 @@ export function createSnake(data,decades,style='open'){
  const key=g=>style==='road'?g[0]:`${g[0]}:${g[1]}`;
  const evidence=(a,b)=>(memberships.get(a)||[]).map(i=>groups[i]).filter(g=>g[2].includes(b));
  function context(start,end,route=[start],links=[]){return {start,end,route,links,bounds:{first:careers.get(start)?.first??null,last:careers.get(end)?.last??null}}}
- function groupAllowed(g,c){
+ function groupAllowed(g,c,ignorePrevious=false){
   if(c.links.some(x=>key(x)===key(g)))return false;
+  if(style==='open')return (ignorePrevious||c.links.at(-1)?.[0]!==g[0])&&c.links.filter(x=>x[0]===g[0]).length<2&&c.links.filter(x=>x[1]===g[1]).length<3;
   if(style!=='career')return true;
   if(!c.links.length)return g[1]===c.bounds.first;
   return g[1]>c.links.at(-1)[1]&&g[1]<=c.bounds.last;
@@ -26,7 +27,37 @@ export function createSnake(data,decades,style='open'){
   for(let i=0;i<players.length;i++){const j=players.lastIndexOf(players[i]);if(j>i){players.splice(i+1,j-i);links.splice(i,j-i);i--}}
   return {players,links};
  }
+ // Exact Open Ice search retains every used player, team-season and usage count.
+ // Relaxed reachability safely prunes disconnected branches; it ignores only
+ // future consecutive-team restrictions, never declares a bounded search dead.
+ function openFinish(c,maxStates){
+  const root=c.route.at(-1),players=[root],links=[];let nodes=0;
+  const state=()=>({...c,route:[...c.route.slice(0,-1),...players],links:[...c.links,...links]});
+  function choices(){
+   const current=state(),blocked=new Set(current.route),distance=new Map([[c.end,0]]),queue=[c.end],expanded=new Set();
+   blocked.delete(root);blocked.delete(players.at(-1));
+   for(let i=0;i<queue.length;i++)for(const gi of memberships.get(queue[i])||[]){
+    if(expanded.has(gi))continue;expanded.add(gi);const g=groups[gi];if(!groupAllowed(g,current,true))continue;
+    for(const id of g[2])if(!blocked.has(id)&&!distance.has(id)){distance.set(id,distance.get(queue[i])+1);queue.push(id)}
+   }
+   if(!distance.has(players.at(-1)))return [];
+   const out=[];for(const gi of memberships.get(players.at(-1))||[]){const g=groups[gi];if(!groupAllowed(g,current))continue;for(const id of g[2])if(!current.route.includes(id)&&distance.has(id))out.push({id,g})}
+   return out.sort((a,b)=>distance.get(a.id)-distance.get(b.id)||a.id-b.id);
+  }
+  if(root===c.end)return {path:{players:[root],links:[]},exhausted:true};
+  const stack=[{options:choices(),index:0}];
+  while(stack.length){
+   const frame=stack.at(-1);
+   if(frame.index>=frame.options.length){stack.pop();if(links.length){players.pop();links.pop()}continue}
+   if(nodes++>=maxStates)return {path:null,exhausted:false};
+   const {id,g}=frame.options[frame.index++];players.push(id);links.push(g.slice(0,2));
+   if(id===c.end)return {path:{players:[...players],links:[...links]},exhausted:true};
+   stack.push({options:choices(),index:0});
+  }
+  return {path:null,exhausted:true};
+ }
  function finish(c,{maxStates=50000}={}){
+  if(style==='open')return openFinish(c,maxStates);
   const stateLimit=style==='career'?Infinity:maxStates;
   const root=c.route.at(-1);if(root===c.end)return {path:{players:[root],links:[]},exhausted:true};
   if(style==='career'&&(c.bounds.first===null||c.bounds.last===null||c.bounds.first>c.bounds.last))return {path:null,exhausted:true};
@@ -61,9 +92,9 @@ export function createSnake(data,decades,style='open'){
   if(c.route.includes(id))return {allowed:false,reason:'Already used'};
   if(!evidence(c.route.at(-1),id).length)return {allowed:false,reason:'No connection to your current player'};
   let options=localConnections(c,id);if(connection)options=options.filter(g=>g[0]===connection[0]&&g[1]===connection[1]);
-  if(!options.length)return {allowed:false,reason:style==='career'?(id===c.end?'Finish in the destination’s last recorded season':'Use the rookie season first, then a later season'):style==='road'?'Use a new team':'Use a new team-season'};
+  if(!options.length)return {allowed:false,reason:style==='career'?(id===c.end?'Finish in the destination’s last recorded season':'Use the rookie season first, then a later season'):style==='road'?'Use a new team':'Change teams each shot; max two uses per team and three per season; no repeated team-season'};
   for(const g of options){
-   if(style==='career'||id===c.end)return {allowed:true,evidence:g};
+   if(style==='career'||style==='open'||id===c.end)return {allowed:true,evidence:g};
    const remaining=finish({...c,route:[...c.route,id],links:[...c.links,g.slice(0,2)]});
    if(remaining.path||!remaining.exhausted)return {allowed:true,evidence:g};
   }
@@ -75,10 +106,11 @@ export function createSnake(data,decades,style='open'){
   for(let i=0;i<path.links.length;i++){const id=path.players[i+1],g=path.links[i];if(!localConnections(state,id).some(x=>x[0]===g[0]&&x[1]===g[1]))return false;state.route.push(id);state.links.push(g)}return true;
  }
  function longest(c,{budgetMs=1800,maxNodes=40000,seedPath=null}={}){
-  const first=finish(c),initial=seedPath&&validPath(c,seedPath)?seedPath:first.path;
+  const first=finish(c,{maxStates:3000}),initial=seedPath&&validPath(c,seedPath)?seedPath:first.path;
   let best=initial,nodes=0,complete=true;const deadline=Date.now()+budgetMs;
   const used=new Set(c.links.map(key)),players=[c.route.at(-1)],links=[],blocked=new Set(c.route);
   const upper=style==='career'?new Set(groups.filter(g=>g[1]<=(c.bounds.last??0)&&g[1]>=(c.bounds.first??Infinity)).map(g=>g[1])).size-c.links.length:Math.min(memberships.size-c.route.length,new Set(groups.map(key)).size-used.size);
+  const openUpper=style==='open'?Math.min(upper,[...new Set(groups.map(g=>g[0]))].reduce((n,t)=>n+Math.max(0,2-c.links.filter(g=>g[0]===t).length),0),[...new Set(groups.map(g=>g[1]))].reduce((n,y)=>n+Math.max(0,3-c.links.filter(g=>g[1]===y).length),0)):upper;
   function options(id){
    const state={...c,route:[...c.route.slice(0,-1),...players],links:[...c.links,...links]},out=[];
    for(const gi of memberships.get(id)||[]){const g=groups[gi];if(used.has(key(g))||!groupAllowed(g,state))continue;for(const next of g[2])if(!blocked.has(next)&&(style!=='career'||next!==c.end||g[1]===c.bounds.last))out.push({next,g})}
@@ -99,8 +131,8 @@ export function createSnake(data,decades,style='open'){
    const frame=stack.at(-1);
    if(frame.index>=frame.options.length){stack.pop();if(links.length){used.delete(key(links.pop()));blocked.delete(players.pop())}continue}
    const {next,g}=frame.options[frame.index++];nodes++;
-   if(next===c.end){if(!best||players.length>best.links.length)best={players:[...players,next],links:[...links,g.slice(0,2)]};if(best.links.length>=upper){reachedBound=true;break}continue}
-   players.push(next);links.push(g.slice(0,2));blocked.add(next);used.add(key(g));stack.push(frameFor(next));if(best&&best.links.length>=upper){reachedBound=true;break}
+   if(next===c.end){if(!best||players.length>best.links.length)best={players:[...players,next],links:[...links,g.slice(0,2)]};if(best.links.length>=openUpper){reachedBound=true;break}continue}
+   players.push(next);links.push(g.slice(0,2));blocked.add(next);used.add(key(g));stack.push(frameFor(next));if(best&&best.links.length>=openUpper){reachedBound=true;break}
   }
   return {path:best,proven:reachedBound||(complete&&first.exhausted),nodes};
  }

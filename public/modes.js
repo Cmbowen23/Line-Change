@@ -3,7 +3,7 @@ export const positions=['any','defense','goalie','forward'];
 export const styleNames={open:'Snake: Open Ice',career:'Snake: Career Run',road:'Snake: Road Trip'};
 export const positionNames={any:'Open Roster',defense:'Blue Line — defensemen',goalie:'Between the Pipes — goalies',forward:'Forward Lines — forwards'};
 export const snakeRules={
- open:'Build the longest chain. Years can move in either direction. Use each player and each team-season once.',
+ open:'Build the longest chain across any years. Change teams every shot. Each team can be used twice total, in different seasons; each season three times total. No repeated players or team-seasons. A dead end ends the round; restart to try again.',
  career:'Start in the first player’s rookie season. Move to a later season with every shot and finish in the destination’s last recorded season. Skip years if needed. A dead end ends your run; restart to try again.',
  road:'Visit as many teams as possible. Years can move in either direction. Use each player once and each team once, even in different seasons.'
 };

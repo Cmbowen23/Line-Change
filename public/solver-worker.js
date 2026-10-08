@@ -10,6 +10,6 @@ self.onmessage=event=>{
    self.postMessage({id,result});return;
   }
   const game=createSnake(data,request.decades,request.style),c=game.context(request.start,request.end,request.route,request.links);
-  self.postMessage({id,result:game.longest(c,{seedPath:request.seedPath})});
+  self.postMessage({id,result:type==='finish'?game.finish(c,{maxStates:Infinity}):game.longest(c,{seedPath:request.seedPath})});
  }catch(error){self.postMessage({id,error:error.message})}
 };
