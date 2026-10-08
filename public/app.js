@@ -117,8 +117,8 @@ function beginFree(a,b){
  render();status(longest()?'Build the longest chain you can. Each player can appear once.':'Your matchup is ready. Make the first connection.');return true;
 }
 function randomFree(){
- const pair=engine.randomMatchup(Math.random,difficultyPool(data,difficulty));
- if(!pair){const message='No matchup requiring at least two shots is available at this difficulty in those decades. Add decades or increase the difficulty.';$('setup-status').textContent=message;status(message,true);return}
+ const pair=engine.randomMatchup(Math.random,difficultyPool(data,difficulty),2,4);
+ if(!pair){const message='No matchup requiring 2–4 shots is available at this difficulty in those decades. Add decades or increase the difficulty.';$('setup-status').textContent=message;status(message,true);return}
  beginFree(pair.start,pair.end);
 }
 async function copyChallenge(url,feedback){

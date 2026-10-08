@@ -48,3 +48,22 @@ test('random games include longer shot lengths and try past an all-connected sta
  const star={players:{1:['Center'],2:['Left'],3:['Right']},groups:tiny.groups.slice(0,2)};
  assert.equal(createEngine(star).randomMatchup(()=>0.999).par,2);
 });
+
+test('random games choose 2, 3, or 4 shots first and never exceed four',()=>{
+ const players=Object.fromEntries(Array.from({length:7},(_,i)=>[i+1,[`Player ${i+1}`]]));
+ const groups=Array.from({length:6},(_,i)=>[`Team ${i}`,20202021,[i+1,i+2]]);
+ for(const [rng,shots] of [[0,2],[0.4,3],[0.999,4]]){
+  const engine=createEngine({players,groups}),pair=engine.randomMatchup(()=>rng);
+  assert.equal(pair.par,shots);assert.equal(engine.shortest(pair.start,pair.end).length-1,shots);
+ }
+ // Two eligible endpoints can only connect in five shots: do not return them.
+ assert.equal(createEngine({players,groups}).randomMatchup(()=>0.4,[1,6]),null);
+});
+test('random games find a requested length beyond the first start and fall back when unavailable',()=>{
+ const players={1:['Center'],2:['Left'],3:['Right'],4:['Far'],5:['Farther']};
+ const groups=[['A',20202021,[1,2]],['B',20202021,[1,3]],['C',20202021,[3,4]],['D',20202021,[4,5]]];
+ // Center has no four-shot endpoint; another start does.
+ const engine=createEngine({players,groups});assert.equal(engine.randomMatchup(()=>0.999).par,4);
+ const star=createEngine({players:{1:['Center'],2:['Left'],3:['Right']},groups:groups.slice(0,2)});
+ for(let i=0;i<3;i++)assert.equal(star.randomMatchup(()=>0.999).par,2);
+});
