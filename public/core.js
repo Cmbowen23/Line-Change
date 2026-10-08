@@ -36,6 +36,50 @@ export function createEngine(data,decades=null){
   }
   return {distance,count:counts.get(a)||0n,routes};
  }
+ function forward(a,b,{excluded=[],usedGroups=[],afterSeason=null,maxShots=Infinity}={}){
+  const blocked=new Set(excluded);blocked.delete(a);
+  if(blocked.has(b))return null;
+  const used=new Set(usedGroups.map(g=>`${g[0]}:${g[1]}`)),expanded=new Set();
+  const states=[{id:a,year:afterSeason,parent:null,group:null,depth:0}],seen=new Set([`${a}:${afterSeason}`]);
+  for(let i=0;i<states.length;i++){
+   const state=states[i];
+   if(state.id===b){const players=[],links=[];for(let n=i;n!==null;n=states[n].parent){players.push(states[n].id);if(states[n].group)links.push(states[n].group.slice(0,2))}return {players:players.reverse(),links:links.reverse()}}
+   if(state.depth>=maxShots)continue;
+   for(const gi of [...(memberships.get(state.id)||[])].sort((x,y)=>data.groups[x][1]-data.groups[y][1])){
+    const group=data.groups[gi],key=`${group[0]}:${group[1]}`;
+    if(used.has(key)||expanded.has(key)||(state.year!==null&&group[1]<state.year))continue;
+    expanded.add(key);
+    for(const id of group[2]){const nextKey=`${id}:${group[1]}`;if(id===state.id||blocked.has(id)||seen.has(nextKey))continue;seen.add(nextKey);states.push({id,year:group[1],parent:i,group,depth:state.depth+1})}
+   }
+  }return null;
+ }
+ const connectionProfiles=new Map();
+ function connectionProfile(id){
+  if(connectionProfiles.has(id))return connectionProfiles.get(id);
+  const groups=(memberships.get(id)||[]).map(i=>data.groups[i]),years=groups.map(g=>Number(String(g[1]).slice(0,4)));
+  const connections=new Set(groups.flatMap(g=>g[2]));connections.delete(id);
+  const profile={first:Math.min(...years),last:Math.max(...years),connections:connections.size,teams:new Set(groups.map(g=>g[0])).size};connectionProfiles.set(id,profile);return profile;
+ }
+ function randomLongestMatchup(random=Math.random,pool=null){
+  const eligible=pool===null?null:new Set(pool),candidates=[...memberships.keys()].filter(p=>!eligible||eligible.has(p));
+  const ranked=candidates.sort((a,b)=>{const x=connectionProfile(a),y=connectionProfile(b);return (y.connections+20*y.teams+10*(y.last-y.first))-(x.connections+20*x.teams+10*(x.last-x.first))});
+  const broadPool=ranked.slice(0,Math.max(12,Math.ceil(ranked.length/2)));let best=null;
+  function consider(a,b){
+   if(a===b)return;
+   const x=connectionProfile(a),y=connectionProfile(b);
+   if(x.first>y.first)[a,b]=[b,a];
+   let path=forward(a,b,{maxShots:4});if(!path){[a,b]=[b,a];path=forward(a,b,{maxShots:4})}if(!path||path.players.length<3)return;
+   const startProfile=connectionProfile(a),endProfile=connectionProfile(b),span=endProfile.last-startProfile.first;
+   const score=span*20+startProfile.connections+endProfile.connections+random()*150;
+   if(!best||score>best.score)best={start:a,end:b,par:path.players.length-1,span,score};
+  }
+  // Sample verified 2–4 shot pairs from players with many connections, then
+  // favor a broad span between an earlier starter and a later destination.
+  for(let i=0;i<12;i++){const pair=randomMatchup(random,broadPool,2,4);if(!pair)break;consider(pair.start,pair.end)}
+  if(!best){const pair=randomMatchup(random,ranked,2,2);if(pair)consider(pair.start,pair.end)}
+  if(!best)return null;
+  const {score,...pair}=best;return pair;
+ }
  const search=q=>{const needle=normalize(q).trim();if(!needle)return [];return Object.entries(data.players).filter(([id,p])=>memberships.has(Number(id))&&normalize(p[0]).includes(needle)).sort((a,b)=>Number(normalize(b[1][0]).startsWith(needle))-Number(normalize(a[1][0]).startsWith(needle))||a[1][0].localeCompare(b[1][0])).slice(0,12).map(([id,p])=>({id:Number(id),name:p[0],position:p[1],first:p[2],last:p[3]}))};
  const hintTeams=(a,b)=>{const path=shortest(a,b);return path&&path.length>1?[...new Set(evidence(a,path[1]).map(g=>g[0]))]:[]};
  const randomAvailability=new Map();
@@ -67,7 +111,7 @@ export function createEngine(data,decades=null){
   const shots=available[Math.floor(random()*available.length)],{start,ends}=alternatives.get(shots);
   return {start,end:ends[Math.floor(random()*ends.length)],par:shots};
  }
- return {evidence,shortest,search,hintTeams,allShortest,randomMatchup};
+ return {evidence,shortest,search,hintTeams,allShortest,randomMatchup,forward,randomLongestMatchup,connectionProfile};
 }
 export function easternDate(now=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(now)}
 export function puzzleFor(data,date){if(data.dailySchedule?.overrides?.[date])return data.dailySchedule.overrides[date];const puzzles=data.dailySchedule?.puzzles||data.puzzles;const day=Math.floor(Date.parse(date+'T00:00:00Z')/86400000);return puzzles[((day%puzzles.length)+puzzles.length)%puzzles.length]}

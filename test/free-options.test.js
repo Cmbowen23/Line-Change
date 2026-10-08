@@ -33,3 +33,17 @@ test('longest chain finish routes exclude already used players',()=>{
  assert.equal(engine.shortest(3,4,[1,2,5]),null);
  assert.deepEqual(engine.shortest(4,4,[1,2,4]),[4]);
 });
+
+test('longest random matchups favor broad careers and have legal forward routes',()=>{
+ let seed=12345;const random=()=>((seed=(seed*1664525+1013904223)>>>0)/4294967296);
+ for(const decades of [null,[2020]]){
+  const engine=createEngine(data,decades),pool=difficultyPool(data,'easy'),pair=engine.randomLongestMatchup(random,pool);
+  assert.ok(pair);assert.ok(pool.includes(pair.start));assert.ok(pool.includes(pair.end));
+  const path=engine.forward(pair.start,pair.end);
+  assert.equal(path.players.length-1,pair.par);assert.ok(pair.par>=2&&pair.par<=4);
+  assert.equal(new Set(path.players).size,path.players.length);
+  assert.equal(new Set(path.links.map(g=>g.join(':'))).size,path.links.length);
+  path.links.forEach((g,i)=>{if(i)assert.ok(g[1]>=path.links[i-1][1]);if(decades)assert.ok(decades.includes(Math.floor(Number(String(g[1]).slice(0,4))/10)*10))});
+  if(!decades)assert.ok(pair.span>=20);
+ }
+});
