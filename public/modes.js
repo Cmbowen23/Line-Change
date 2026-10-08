@@ -31,3 +31,8 @@ export function playersFromEras(data,decades,pool=null){
  for(const group of data.groups)if(allowed.has(Math.floor(Number(String(group[1]).slice(0,4))/10)*10))for(const id of group[2])ids.add(id);
  return pool===null?[...ids]:pool.filter(id=>ids.has(id));
 }
+
+// The destination is supplied by the game; an automatic finish is not another shot.
+export function minimumShots(connections){return Math.max(1,connections-1)}
+export function shortestShots(route,end){return route.at(-1)===end?minimumShots(route.length-1):Math.max(0,route.length-1)}
+export function shotLabel(shots){return `${shots} ${shots===1?'shot':'shots'}`}

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createSnake,randomSnake} from '../public/snake.js';
-import {snakeScore,matchesPosition,playersFromEras} from '../public/modes.js';
+import {snakeScore,matchesPosition,playersFromEras,minimumShots,shortestShots,shotLabel} from '../public/modes.js';
 import {createEngine} from '../public/core.js';
 import {challengeURL,parseChallenge,allDecades} from '../public/challenges.js';
 import {difficultyPool} from '../public/presentation.js';
@@ -76,7 +76,7 @@ test('real random Snake games respect endpoint familiarity, selected decades, an
   const game=createSnake(real,allDecades,style),c=game.context(pair.start,pair.end),path=game.finish(c).path;assert.ok(game.validPath(c,path),style);assert.equal(pair.par,path.links.length);
  }
 });
-test('real position matchups have truthful restricted two-to-four-shot minima',()=>{
+test('core position matchups report truthful teammate-connection distances',()=>{
  let seed=84;const rng=()=>((seed=(seed*1664525+1013904223)>>>0)/4294967296),base=createEngine(real,[2020]);
  for(const position of ['defense','goalie','forward']){
   const pair=base.randomMatchup(rng,difficultyPool(real,'easy'),2,4,position);assert.ok(pair,position);
@@ -109,11 +109,25 @@ test('random shortest endpoints come from selected eras but minimum shots are ve
 });
 
 test('the generation worker uses era-filtered endpoints with unrestricted Shortest Chain connection years',()=>{
- const data={players:{1:['Start','C'],2:['Old bridge','D'],3:['End','C'],4:['Era teammate','R'],5:['Other era teammate','R']},groups:[['A',20102011,[1,4]],['B',20102011,[3,5]],['C',19901991,[1,2]],['D',19801981,[2,3]]]};
+ const data={players:{1:['Start','C'],2:['Old bridge','D'],3:['End','C'],4:['Era teammate','R'],5:['Other era teammate','R'],6:['Second old bridge','D']},groups:[['A',20102011,[1,4]],['B',20102011,[3,5]],['C',19901991,[1,2]],['D',19801981,[2,6]],['E',19811982,[6,3]]]};
  const messages=[],self={postMessage:message=>messages.push(message)},randomMath=Object.create(Math);randomMath.random=()=>.4;
  const source=readFileSync(new URL('../public/solver-worker.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
- new Function('createEngine','createSnake','randomSnake','allDecades','playersFromEras','self','Math',source)(createEngine,createSnake,randomSnake,allDecades,playersFromEras,self,randomMath);
+ new Function('createEngine','createSnake','randomSnake','allDecades','playersFromEras','minimumShots','self','Math',source)(createEngine,createSnake,randomSnake,allDecades,playersFromEras,minimumShots,self,randomMath);
  self.onmessage({data:{type:'init',data}});self.onmessage({data:{id:1,type:'random',style:'shortest',decades:[2010],pool:[1,2,3],position:'defense'}});
- const pair=messages[0].result;assert.ok(pair);assert.equal(pair.par,2);assert.ok([1,3].includes(pair.start)&&[1,3].includes(pair.end));
+ const pair=messages[0].result;assert.ok(pair);assert.equal(pair.par,2);assert.equal(minimumShots(createEngine(data,allDecades,{position:'defense',start:pair.start,end:pair.end}).shortest(pair.start,pair.end).length-1),pair.par);assert.ok([1,3].includes(pair.start)&&[1,3].includes(pair.end));
  self.onmessage({data:{id:2,type:'random',style:'open',decades:[2010],pool:[1,3]}});assert.equal(messages[1].result,null);
+});
+
+test('shot scoring charges additions rather than the automatic destination connection',()=>{
+ assert.equal(shortestShots([1],4),0);assert.equal(shortestShots([1,2],4),1);assert.equal(shortestShots([1,2,4],4),1);assert.equal(shortestShots([1,2,3,4],4),2);assert.equal(shortestShots([1,4],4),1);
+ assert.equal(minimumShots(2),1);assert.equal(minimumShots(3),2);assert.equal(shotLabel(1),'1 shot');assert.equal(shotLabel(2),'2 shots');
+});
+
+test('real random Shortest Chain games require two to four player additions under each position rule',()=>{
+ let seed=47;const rng=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/2**32),pool=playersFromEras(real,[2000,2010,2020],difficultyPool(real,'easy'));
+ for(const position of ['any','defense','goalie','forward']){
+  const pair=createEngine(real,allDecades).randomMatchup(rng,pool,3,5,position);assert.ok(pair,position);
+  const path=createEngine(real,allDecades,{position,start:pair.start,end:pair.end}).shortest(pair.start,pair.end),shots=minimumShots(pair.par);
+  assert.equal(shortestShots(path,pair.end),shots);assert.ok(shots>=2&&shots<=4,position);assert.equal(path.length-2,shots);
+ }
 });

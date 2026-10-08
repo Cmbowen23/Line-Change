@@ -49,7 +49,7 @@ test('Open Ice app leaves a close-to-end chain open, counts shots, and labels it
 });
 test('Shortest Chain app enforces restricted bridges, auto-finishes, and Daily restores Open Roster',()=>{
  const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,2,3]],['B',20112012,[2,4]],['C',20112012,[3,4]]]};
- const ui=app();ui.configure(d,'shortest','goalie');assert.equal(ui.beginFree(1,4),true);ui.element('close-intro').onclick();ui.add(2);assert.deepEqual(ui.state().route,[1]);ui.add(3);assert.deepEqual(ui.state().route,[1,3,4]);assert.equal(ui.state().finished,true);assert.equal(ui.element('completion-shots').textContent,'2 shots');ui.daily();assert.equal(ui.state().gamePosition,'any');assert.equal(ui.element('give-up').textContent,'Reveal shortest route');
+ const ui=app();ui.configure(d,'shortest','goalie');assert.equal(ui.beginFree(1,4),true);ui.element('close-intro').onclick();ui.add(2);assert.deepEqual(ui.state().route,[1]);ui.add(3);assert.deepEqual(ui.state().route,[1,3,4]);assert.equal(ui.state().finished,true);assert.equal(ui.element('completion-shots').textContent,'1 shot');ui.daily();assert.equal(ui.state().gamePosition,'any');assert.equal(ui.element('give-up').textContent,'Reveal shortest route');
 });
 
 test('Open Ice accepts a risky shot then ends the round on a proven dead end, with restart and no undo',async()=>{
@@ -81,17 +81,30 @@ test('Career Run player history advances its bold years and greys out every earl
 
 test('every round prominently displays its active rules and clears restrictions when switching back to Daily',()=>{
  const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,2,3]],['B',20112012,[2,4]],['C',20112012,[3,4]]]};const ui=app();
- ui.configure(d,'shortest','goalie');ui.beginFree(1,4);assert.equal(ui.element('round-rules-title').textContent,'Goalies only');assert.equal(ui.element('round-target').textContent,'MINIMUM 2 SHOTS');assert.match(ui.element('round-rule-list').textContent,/Only goalies/);assert.match(ui.element('round-rule-list').textContent,/unrestricted/);assert.equal(ui.element('era-summary').textContent,'Matchup player eras: 2010s · All seasons allowed for connections.');
+ ui.configure(d,'shortest','goalie');ui.beginFree(1,4);assert.equal(ui.element('round-rules-title').textContent,'Goalies only');assert.equal(ui.element('round-target').textContent,'MINIMUM 1 SHOT');assert.match(ui.element('round-rule-list').textContent,/Only goalies/);assert.match(ui.element('round-rule-list').textContent,/unrestricted/);assert.equal(ui.element('era-summary').textContent,'Matchup player eras: 2010s · All seasons allowed for connections.');
  ui.configure(d,'shortest','defense');ui.beginFree(1,4);assert.equal(ui.element('round-rules-title').textContent,'Defensemen only');assert.doesNotMatch(ui.element('round-rule-list').textContent,/goalies/);
  ui.configure(graph,'career');ui.beginFree(1,4);assert.match(ui.element('round-rule-list').textContent,/rookie season, 2010–11/);assert.match(ui.element('round-rule-list').textContent,/End in 2013–14/);assert.match(ui.element('round-rule-list').textContent,/dead end ends the round/);
  ui.daily();assert.equal(ui.element('round-rules-title').textContent,'Shortest chain');assert.match(ui.element('round-rule-list').textContent,/any NHL player/);assert.doesNotMatch(ui.element('round-rule-list').textContent,/rookie|defensemen|goalies/);assert.equal(ui.element('free-controls').hidden,true);
 });
 
 test('Shortest Chain era selection limits endpoints while old connections, histories and rosters remain playable',()=>{
- const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,5]],['B',20102011,[4,6]],['C',19901991,[1,2]],['D',19801981,[2,4]]]};const ui=app();ui.configure(d,'shortest','defense');assert.equal(ui.beginFree(1,4),true);assert.equal(ui.element('round-target').textContent,'MINIMUM 2 SHOTS');
+ const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,5]],['B',20102011,[4,6]],['C',19901991,[1,2]],['D',19801981,[2,4]]]};const ui=app();ui.configure(d,'shortest','defense');assert.equal(ui.beginFree(1,4),true);assert.equal(ui.element('round-target').textContent,'MINIMUM 1 SHOT');
  const details=new Element('details');ui.fillTeamDetails(details,1);assert.ok(details.querySelectorAll('*').some(x=>x.tagName==='button'&&x.textContent==='1990–91'));assert.equal(details.querySelectorAll('*').some(x=>x.className==='endpoint-years outside-years'),false);
  ui.openExplorer({kind:'player',id:1});assert.ok(ui.element('explore-content').querySelectorAll('*').some(x=>x.tagName==='button'&&x.textContent==='1990–91'));
  ui.add(2,['C',19901991]);assert.deepEqual(ui.state().route,[1,2,4]);assert.equal(ui.state().finished,true);
  const other=app();other.configure(d,'shortest','defense');assert.equal(other.beginFree(2,4),false);
  const snakeUI=app();snakeUI.configure(d,'open');assert.equal(snakeUI.beginFree(1,4),false);
+});
+
+test('Shortest Chain counts player additions, with no extra shot for the automatic destination link',()=>{
+ const ui=app();ui.configure(graph,'shortest');assert.equal(ui.beginFree(1,4),true);
+ assert.equal(ui.element('game-goal').textContent,'0 shots taken');assert.equal(ui.element('par').textContent,'MINIMUM 2 SHOTS');
+ ui.add(2);assert.deepEqual(ui.state().route,[1,2]);assert.equal(ui.element('game-goal').textContent,'1 shot taken');
+ ui.element('undo').onclick();assert.equal(ui.element('game-goal').textContent,'0 shots taken');ui.add(2);ui.add(3);
+ assert.deepEqual(ui.state().route,[1,2,3,4]);assert.equal(ui.element('game-goal').textContent,'2 shots taken');assert.equal(ui.element('completion-shots').textContent,'2 shots');assert.equal(ui.element('completion-minimum').textContent,'Minimum possible: 2 shots');assert.match(ui.element('result').textContent,/2 SHOTS · MINIMUM 2/);
+ ui.daily();assert.equal(ui.element('par').textContent,'MINIMUM 2 SHOTS');ui.add(2);ui.add(3);assert.equal(ui.element('completion-shots').textContent,'2 shots');ui.daily();assert.equal(ui.element('game-goal').textContent,'2 shots taken');
+});
+test('direct teammates still take one shot and revealed Shortest Chain answers use player-addition scoring',()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,2);assert.equal(ui.element('par').textContent,'MINIMUM 1 SHOT');ui.add(2);assert.equal(ui.element('completion-shots').textContent,'1 shot');assert.equal(ui.element('completion-minimum').textContent,'Minimum possible: 1 shot');
+ ui.beginFree(1,4);ui.element('give-up').onclick();assert.match(ui.element('result').textContent,/2 SHOTS · MINIMUM 2/);assert.equal(ui.element('game-goal').textContent,'2 shots taken');
 });
