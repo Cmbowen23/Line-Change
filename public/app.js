@@ -34,6 +34,7 @@ function add(p){
  if(!engine.evidence(route.at(-1),p).length){status(`${name(route.at(-1))} and ${name(p)} don’t share an NHL team-season. Try another player.`,true);return}
  if(longest()&&p!==end&&!engine.shortest(p,end,route)){status('That player leaves no route to the destination without repeating a player. Try a different connection.',true);return}
  route=appendConnection(engine,route,p,end,longest());$('player-search').value='';$('player-results').replaceChildren();
+ for(const details of $('chain').querySelectorAll('.chain-teams[open]'))details.open=false;
  if(route.at(-1)===end){finished=true;if(mode==='daily'){const wins=read('line-change-wins',{});wins[date]=true;write('line-change-wins',wins);showStreak()}}
  save();render();status(finished?'Every link verified. Nice line change.':`Valid connection. ${proof(route.at(-2),p)}`);
 }
