@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createEngine} from '../public/core.js';
+import {challengeURL,parseChallenge} from '../public/challenges.js';
+const data=JSON.parse(await readFile(new URL('../public/data/hockey.json',import.meta.url)));
+test('shared matchups round trip players and decade rules',()=>{
+ const engine=createEngine(data,[1990,2000]);const pair=engine.randomMatchup(()=>0.4);
+ const url=challengeURL('https://example.com/?unrelated=1#old',pair.start,pair.end,[2000,1990]);
+ const shared=parseChallenge(url,data);
+ assert.deepEqual(shared,{start:pair.start,end:pair.end,decades:[1990,2000]});
+ assert.equal(createEngine(data,shared.decades).shortest(shared.start,shared.end).length-1,pair.par);
+ assert.equal(new URL(url).hash,'');
+ assert.equal(parseChallenge('https://example.com/',data),null);
+});
+test('invalid shared links cannot create broken games',()=>{
+ for(const query of ['start=1','start=abc&end=2&decades=1990','start=99999999&end=2&decades=1990','start=1&end=1&decades=1990','start=1&end=2&decades=1880','start=1&end=2&decades='])assert.throws(()=>parseChallenge('https://example.com/?'+query,data));
+});
+test('random matchups are distinct, reachable, and constrained to selected eras',()=>{
+ for(const decades of [[1910],[1940,1950],[1990,2010],[2020]]){
+  const engine=createEngine(data,decades);
+  for(const rng of [()=>0,()=>0.5,()=>0.9999]){
+   const pair=engine.randomMatchup(rng);assert.ok(pair);assert.notEqual(pair.start,pair.end);
+   const path=engine.shortest(pair.start,pair.end);assert.equal(pair.par,path.length-1);
+   for(let i=1;i<path.length;i++)assert.ok(engine.evidence(path[i-1],path[i]).every(g=>decades.includes(Math.floor(Number(String(g[1]).slice(0,4))/10)*10)));
+  }
+ }
+ assert.equal(createEngine(data,[]).randomMatchup(),null);
+});
+test('random games skip isolated players and allow small teammate-only graphs',()=>{
+ const tiny={players:{1:['A'],2:['B'],3:['C']},groups:[['X',20002001,[1]],['Y',20002001,[2,3]]]};
+ const pair=createEngine(tiny).randomMatchup(()=>0.99);
+ assert.deepEqual([pair.start,pair.end].sort(),[2,3]);assert.equal(pair.par,1);
+});

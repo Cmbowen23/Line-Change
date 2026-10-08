@@ -37,7 +37,20 @@ export function createEngine(data,decades=null){
  }
  const search=q=>{const needle=normalize(q).trim();if(!needle)return [];return Object.entries(data.players).filter(([id,p])=>memberships.has(Number(id))&&normalize(p[0]).includes(needle)).sort((a,b)=>Number(normalize(b[1][0]).startsWith(needle))-Number(normalize(a[1][0]).startsWith(needle))||a[1][0].localeCompare(b[1][0])).slice(0,12).map(([id,p])=>({id:Number(id),name:p[0],position:p[1],first:p[2],last:p[3]}))};
  const hintTeams=(a,b)=>{const path=shortest(a,b);return path&&path.length>1?[...new Set(evidence(a,path[1]).map(g=>g[0]))]:[]};
- return {evidence,shortest,search,hintTeams,allShortest};
+ function randomMatchup(random=Math.random){
+  const candidates=[...memberships.keys()];
+  // Randomize starting players; explore each connected component at most once.
+  for(let i=candidates.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[candidates[i],candidates[j]]=[candidates[j],candidates[i]]}
+  const visited=new Set();
+  for(const a of candidates){
+   if(visited.has(a))continue;
+   const q=[a],distance=new Map([[a,0]]),groups=new Set();
+   for(let i=0;i<q.length;i++){const p=q[i];visited.add(p);for(const gi of memberships.get(p)||[]){if(groups.has(gi))continue;groups.add(gi);for(const n of data.groups[gi][2])if(!distance.has(n)){distance.set(n,distance.get(p)+1);q.push(n)}}}
+   const longer=q.filter(p=>distance.get(p)>=2),ends=longer.length?longer:q.slice(1);
+   if(ends.length){const b=ends[Math.floor(random()*ends.length)];return {start:a,end:b,par:distance.get(b)}}
+  }return null;
+ }
+ return {evidence,shortest,search,hintTeams,allShortest,randomMatchup};
 }
 export function easternDate(now=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(now)}
 export function puzzleFor(data,date){if(data.dailySchedule?.overrides?.[date])return data.dailySchedule.overrides[date];const puzzles=data.dailySchedule?.puzzles||data.puzzles;const day=Math.floor(Date.parse(date+'T00:00:00Z')/86400000);return puzzles[((day%puzzles.length)+puzzles.length)%puzzles.length]}
