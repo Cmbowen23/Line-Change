@@ -32,3 +32,10 @@ test('random games skip isolated players and allow small teammate-only graphs',(
  const pair=createEngine(tiny).randomMatchup(()=>0.99);
  assert.deepEqual([pair.start,pair.end].sort(),[2,3]);assert.equal(pair.par,1);
 });
+
+test('shared games preserve longest-chain style and reject unknown styles',()=>{
+ const pair=createEngine(data,[2020]).randomMatchup(()=>0.4);
+ const url=challengeURL('https://example.com/',pair.start,pair.end,[2020],'longest');
+ assert.equal(parseChallenge(url,data).style,'longest');
+ assert.throws(()=>parseChallenge(url.replace('style=longest','style=unknown'),data));
+});

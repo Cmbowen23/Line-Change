@@ -4,11 +4,12 @@ export function createEngine(data,decades=null){
  const allowed=decades===null?null:new Set(decades);
  data.groups.forEach((g,i)=>{if(allowed&&!allowed.has(Math.floor(Number(String(g[1]).slice(0,4))/10)*10))return;g[2].forEach(p=>{if(!memberships.has(p))memberships.set(p,[]);memberships.get(p).push(i)})});
  const evidence=(a,b)=>{const other=new Set(memberships.get(b)||[]);return (memberships.get(a)||[]).filter(i=>other.has(i)).map(i=>data.groups[i])};
- function shortest(a,b){
+ function shortest(a,b,excluded=[]){
+  const blocked=new Set(excluded);blocked.delete(a);
   const parents=new Map([[a,null]]),seen=new Set(),q=[a];
   for(let i=0;i<q.length;i++){
    const p=q[i];if(p===b){const out=[];for(let n=b;n!==null;n=parents.get(n))out.push(n);return out.reverse()}
-   for(const gi of memberships.get(p)||[]){if(seen.has(gi))continue;seen.add(gi);for(const n of data.groups[gi][2])if(!parents.has(n)){parents.set(n,p);q.push(n)}}
+   for(const gi of memberships.get(p)||[]){if(seen.has(gi))continue;seen.add(gi);for(const n of data.groups[gi][2])if(!blocked.has(n)&&!parents.has(n)){parents.set(n,p);q.push(n)}}
   }return null;
  }
  function allShortest(a,b){

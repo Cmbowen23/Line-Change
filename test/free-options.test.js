@@ -25,3 +25,11 @@ test('team histories keep full careers and mark only allowed seasons',()=>{
  assert.equal(seasonRanges([20202021,20212022,20232024]),'2020–21 to 2021–22, 2023–24');
  assert.equal(seasonRanges([20202021,20202021]),'2020–21');
 });
+
+test('longest chain finish routes exclude already used players',()=>{
+ const graph={players:{1:['Start'],2:['Used'],3:['Current'],4:['End'],5:['Detour']},groups:[['X',20202021,[1,2]],['X',20212022,[2,3]],['X',20222023,[2,4]],['X',20232024,[3,5]],['X',20242025,[5,4]]]};
+ const engine=createEngine(graph);
+ assert.deepEqual(engine.shortest(3,4,[1,2]),[3,5,4]);
+ assert.equal(engine.shortest(3,4,[1,2,5]),null);
+ assert.deepEqual(engine.shortest(4,4,[1,2,4]),[4]);
+});
