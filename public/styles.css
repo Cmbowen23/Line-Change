@@ -31,3 +31,5 @@
 .long-answer{max-height:320px;overflow:auto;overscroll-behavior:contain;padding-right:8px}
 
 .explore-header{position:sticky;top:-24px;background:var(--cream);z-index:3;padding:10px 0 0;border-bottom:1px solid var(--line)}.explore-header .explore-toolbar{position:static;padding:8px 0}.explore-header #explore-goal{font-size:14px;font-weight:bold;line-height:1.5;margin:0}.explore-header #explore-step{font-size:11px;line-height:1.5;color:var(--muted);margin:6px 0}.season-link:disabled{font-weight:normal;color:var(--muted);cursor:default;background:none;border-color:transparent}@media(max-width:480px){.explore-header{top:-20px}}
+
+.inactive-history{color:var(--muted)}.history-progress{display:block;margin:6px 0;color:var(--ink);font-weight:bold}

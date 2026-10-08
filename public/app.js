@@ -211,14 +211,18 @@ function seasonExploreAllowed(year){
  if(!longest()||gameStyle!=='career')return true;
  const c=snakeContext();return routeLinks.length?year>routeLinks.at(-1)[1]&&year<=c.bounds.last:year===c.bounds.first;
 }
+function historyFor(id){
+ return playerHistory(data,id,activeDecades()).map(record=>({...record,allowed:record.allowed.filter(seasonExploreAllowed)}));
+}
 function fillTeamDetails(details,id){
   if(!details.querySelector('summary')){const summary=document.createElement('summary');summary.textContent='Teams & seasons';details.append(summary)}
-  for(const record of playerHistory(data,id,activeDecades())){
+  if(longest()&&gameStyle==='career'){const progress=document.createElement('small');progress.className='history-progress';progress.textContent=routeLinks.length?`Continue after ${season(routeLinks.at(-1)[1])}. Earlier seasons are greyed out.`:`First shot: ${season(snakeContext().bounds.first)} only.`;details.append(progress)}
+  for(const record of historyFor(id)){
    const row=document.createElement('div');row.className='endpoint-team';const team=document.createElement(record.allowed.length?'strong':'span');team.textContent=data.teams[record.team]||record.team;row.append(team);
    const allowed=document.createElement('div');allowed.className='endpoint-years';if(canExplore()){for(const year of record.allowed){const button=document.createElement('button');button.type='button';button.className='season-link';button.textContent=season(year);button.disabled=!seasonExploreAllowed(year);button.setAttribute('aria-label',`Explore ${data.teams[record.team]||record.team} ${season(year)} roster`);button.onclick=()=>openExplorer({kind:'roster',team:record.team,year,query:''});allowed.append(button)}}else{const text=document.createElement('strong');text.textContent=seasonRanges(record.allowed);allowed.append(text)}if(record.allowed.length)row.append(allowed);
    const outside=record.seasons.filter(s=>!record.allowed.includes(s));if(outside.length){const rest=document.createElement('span');rest.className='endpoint-years outside-years';rest.textContent=seasonRanges(outside);row.append(rest)}details.append(row);
   }
-  const note=document.createElement('small');note.textContent=canExplore()?'Tap a bold season to explore its roster.':'Bold teams and seasons count in this game.';details.append(note);
+  const note=document.createElement('small');note.textContent=canExplore()?'Tap a bold season to explore its roster. Grey seasons cannot be used for your next shot.':'Bold teams and seasons count in this game.';details.append(note);
 }
 function closeExplorer(){if($('explorer').open)$('explorer').close();exploreStack=[];}
 function openExplorer(view){if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;exploreStack=[view];renderExplorer();if(!$('explorer').open)$('explorer').showModal();}
@@ -226,7 +230,7 @@ function visitExplorer(view){if(view.kind==='roster'&&!seasonExploreAllowed(view
 function renderExplorer(){
  const view=exploreStack.at(-1);if(!view)return;
  const bounds=longest()&&gameStyle==='career'?snakeContext().bounds:null;
- $('explore-goal').textContent=`Trying to connect ${name(start)}${bounds?' '+String(bounds.first).slice(0,4):''} to ${name(end)}${bounds?' '+String(bounds.last).slice(0,4):''}.`;
+ $('explore-goal').textContent=`Trying to connect ${name(start)}${bounds?' '+season(bounds.first):''} to ${name(end)}${bounds?' '+season(bounds.last):''}.`;
  $('explore-step').textContent=bounds?(routeLinks.length?`Next shot: a later season than ${season(routeLinks.at(-1)[1])}, ending by ${season(bounds.last)}.`:`First shot: ${name(start)}’s rookie season, ${season(bounds.first)}.`):longest()?`${styleNames[gameStyle]} · ${routeLinks.length} shots taken.`:`Minimum ${optimal} shots · ${positionNames[gamePosition]}.`;
  $('explore-back').disabled=exploreStack.length<2;$('explore-content').replaceChildren();$('roster-search-box').hidden=view.kind!=='roster';
  const content=$('explore-content');
@@ -238,8 +242,8 @@ function renderExplorer(){
   const verdict=eligibility(view.id,view.connection),button=document.createElement('button');button.textContent=verdict.allowed?(view.id===end?'Connect to destination':'Add to chain') :verdict.reason;button.disabled=!verdict.allowed;
   button.onclick=()=>{const before=route.length;add(view.id,view.connection);if(route.length>before){closeExplorer();if(!finished)requestAnimationFrame(()=>{const player=$('chain').querySelector(`[data-player-id="${view.id}"]`);player?.querySelector('summary')?.focus();player?.scrollIntoView({behavior:'smooth',block:'center'})})}else renderExplorer()};profile.append(button);content.append(profile);
   const note=document.createElement('p');note.className='explore-note';note.textContent=verdict.allowed?(!longest()&&view.id!==end&&engine.evidence(view.id,end).length?`This player connects to ${name(route.at(-1))} and ${name(end)}. Add them to finish automatically; both connections count as shots.`:`This player connects to ${name(route.at(-1))}. Adding them takes one shot.`):'You can keep exploring this career without adding a player.';content.append(note);
-  for(const record of playerHistory(data,view.id,activeDecades())){
-   const row=document.createElement('div');row.className='explore-career-team';const title=document.createElement('strong');title.textContent=data.teams[record.team]||record.team;row.append(teamLogo(record.team,title.textContent),title);content.append(row);
+  for(const record of historyFor(view.id)){
+   const row=document.createElement('div');row.className='explore-career-team'+(record.allowed.length?'':' inactive-history');const title=document.createElement(record.allowed.length?'strong':'span');title.textContent=data.teams[record.team]||record.team;row.append(teamLogo(record.team,title.textContent),title);content.append(row);
    const seasons=document.createElement('div');seasons.className='explore-seasons';for(const year of record.seasons){const allowed=record.allowed.includes(year)&&seasonExploreAllowed(year),link=document.createElement(allowed?'button':'span');link.textContent=season(year);if(allowed){link.type='button';link.className='season-link';link.setAttribute('aria-label',`Explore ${title.textContent} ${season(year)} roster`);link.onclick=()=>visitExplorer({kind:'roster',team:record.team,year,query:''})}else link.className='outside-years';seasons.append(link)}content.append(seasons);
   }
  }

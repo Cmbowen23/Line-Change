@@ -61,13 +61,20 @@ test('Open Ice accepts a risky shot then ends the round on a proven dead end, wi
 test('Career Run exploration restricts the first shot to rookie year and keeps the dated goal visible',()=>{
  const d={...graph,groups:[...graph.groups,['E',20112012,[1,6]]]};const ui=app();ui.configure(d,'career');assert.equal(ui.beginFree(1,4),true);
  assert.equal(ui.seasonExploreAllowed(20102011),true);assert.equal(ui.seasonExploreAllowed(20112012),false);
- ui.openExplorer({kind:'player',id:1});assert.equal(ui.element('explore-goal').textContent,'Trying to connect Start 2010 to End 2013.');
+ ui.openExplorer({kind:'player',id:1});assert.equal(ui.element('explore-goal').textContent,'Trying to connect Start 2010–11 to End 2013–14.');
  const buttons=ui.element('explore-content').querySelectorAll('*').filter(x=>x.tagName==='button'&&x.className==='season-link');assert.deepEqual(buttons.map(x=>x.textContent),['2010–11']);
- const details=new Element('details');ui.fillTeamDetails(details,1);const inline=details.querySelectorAll('*').filter(x=>x.tagName==='button');assert.equal(inline.find(x=>x.textContent==='2011–12').disabled,true);
+ const details=new Element('details');ui.fillTeamDetails(details,1);const inline=details.querySelectorAll('*').filter(x=>x.tagName==='button');assert.equal(inline.some(x=>x.textContent==='2011–12'),false);assert.ok(details.querySelectorAll('*').some(x=>x.className==='endpoint-years outside-years'&&x.textContent==='2011–12'));
  ui.openExplorer({kind:'roster',team:'E',year:20112012});assert.equal(ui.element('explore-title').textContent,'Start');
  ui.add(2,['A',20102011]);assert.equal(ui.seasonExploreAllowed(20102011),false);assert.equal(ui.seasonExploreAllowed(20122013),true);assert.equal(ui.seasonExploreAllowed(20142015),false);
- ui.openExplorer({kind:'player',id:2});assert.match(ui.element('explore-step').textContent,/later season than 2010/);assert.equal(ui.element('explore-goal').textContent,'Trying to connect Start 2010 to End 2013.');
+ ui.openExplorer({kind:'player',id:2});assert.match(ui.element('explore-step').textContent,/later season than 2010/);assert.equal(ui.element('explore-goal').textContent,'Trying to connect Start 2010–11 to End 2013–14.');
 });
 test('a late Open Ice dead-end result cannot end a restarted game',async()=>{
  const ui=app();ui.configure(graph,'open');ui.beginFree(1,4);ui.add(5,['A',20102011]);ui.element('restart-game').onclick();await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().finished,false);assert.equal(ui.state().lost,false);
+});
+
+test('Career Run player history advances its bold years and greys out every earlier year after a shot',()=>{
+ const d={...graph,groups:[...graph.groups,['E',20102011,[3,6]],['F',20112012,[3,6]],['G',20142015,[3,6]]]};const ui=app();ui.configure(d,'career');ui.beginFree(1,4);ui.add(2,['A',20102011]);ui.add(3,['B',20122013]);
+ const details=new Element('details');ui.fillTeamDetails(details,3);const all=details.querySelectorAll('*');const buttons=all.filter(x=>x.tagName==='button'&&x.className==='season-link');assert.deepEqual(buttons.map(x=>x.textContent),['2013–14']);assert.ok(all.some(x=>x.className==='history-progress'&&x.textContent.includes('Continue after 2012–13')));
+ const grey=all.filter(x=>x.className==='endpoint-years outside-years').map(x=>x.textContent).join(' ');for(const year of ['2010–11','2011–12','2012–13','2014–15'])assert.ok(grey.includes(year),year);
+ ui.openExplorer({kind:'player',id:3});const discovery=ui.element('explore-content').querySelectorAll('*');assert.deepEqual(discovery.filter(x=>x.tagName==='button'&&x.className==='season-link').map(x=>x.textContent),['2013–14']);assert.ok(discovery.some(x=>x.className==='outside-years'&&x.textContent==='2012–13'));assert.match(ui.element('explore-step').textContent,/later season than 2012–13/);
 });
