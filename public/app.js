@@ -42,8 +42,12 @@ function appendRouteExplanation(parent){
  for(let i=0;i<route.length-1;i++){
   const [team,year]=engine.evidence(route[i],route[i+1])[0];
   const row=document.createElement('div');row.className='connection-explanation';
-  const text=document.createElement('p');text.textContent=connectionSentence({fromName:name(route[i]),toName:name(route[i+1]),index:i,lastIndex:route.length-1,teamName:data.teams[team]||team,season:season(year)});
-  row.append(teamLogo(team,data.teams[team]||team),text);section.append(row);
+  const player=(id)=>{const figure=document.createElement('figure'),caption=document.createElement('figcaption');figure.className='connection-player';caption.textContent=name(id);figure.append(portrait(id,name(id)),caption);return figure};
+  const arrow=document.createElement('span');arrow.className='connection-arrow';arrow.textContent='→';arrow.setAttribute('aria-hidden','true');
+  const detail=document.createElement('div');detail.className='connection-detail';
+  const text=document.createElement('p');text.textContent=connectionSentence({fromName:name(route[i]),toName:name(route[i+1]),teamName:data.teams[team]||team,season:season(year)});
+  detail.append(teamLogo(team,data.teams[team]||team),text);
+  row.append(player(route[i]),arrow,player(route[i+1]),detail);section.append(row);
  }parent.append(section);
 }
 function appendAllAnswers(parent){
