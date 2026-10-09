@@ -42,16 +42,15 @@ function app(){
 const graph={version:'test',teams:{A:'Team A',B:'Team B',C:'Team C',D:'Team D'},puzzles:[[1,4,3]],players:{1:['Start','C',20102011,20102011],2:['Bridge','D',20102011,20122013],3:['Next','G',20122013,20132014],4:['End','C',20132014,20132014],5:['Trap','D',20102011,20142015],6:['Other','R',20142015,20142015]},groups:[['A',20102011,[1,2,5]],['B',20122013,[2,3]],['C',20132014,[3,4]],['D',20142015,[5,6]]]};
 test('Lookup renders an answer without modifying the chain or opening completion',async()=>{
  const ui=app();ui.configure(graph,'shortest');ui.daily();const before=ui.state();ui.setupFree();
- ui.element('matchup-purpose').value='lookup';ui.element('matchup-purpose').onchange();
- assert.equal(ui.element('matchup-game-options').hidden,true);assert.equal(ui.element('custom-actions').hidden,true);
+ assert.equal(ui.element('lookup-options').hidden,true);assert.equal(ui.element('lookup-open').disabled,true);assert.ok(!ui.element('custom-actions').hidden);
  for(const [side,query] of [['start','Start'],['end','End']]){ui.element(side+'-search').value=query;ui.element(side+'-search').listeners.input();ui.flushTimers();ui.element(side+'-results').children.find(x=>x.tagName==='button').onclick()}
  assert.equal(ui.element('lookup-submit').disabled,false);
- await ui.element('lookup-submit').onclick();assert.equal(ui.element('lookup-result').hidden,false);assert.equal(ui.element('lookup-heading').textContent,'Shortest route');assert.match(ui.element('lookup-summary').textContent,/2 shots/);
+ ui.element('lookup-open').onclick();await new Promise(resolve=>setImmediate(resolve));assert.equal(ui.element('lookup-options').hidden,false);assert.equal(ui.element('lookup-result').hidden,false);assert.equal(ui.element('lookup-heading').textContent,'Shortest route');assert.match(ui.element('lookup-summary').textContent,/2 shots/);
  assert.equal(ui.element('lookup-chain').children.filter(x=>x.dataset.playerId).length,4);assert.deepEqual(ui.state(),before);assert.equal(ui.element('completion').open,false);
  for(const style of ['career','road']){ui.element('lookup-style').value=style;ui.element('lookup-style').onchange();await ui.element('lookup-submit').onclick();assert.equal(ui.element('lookup-result').hidden,false);assert.match(ui.element('lookup-summary').textContent,style==='career'?/3 seasons/:/3 teams/)}
 });
 test('Changing a lookup while it is searching discards its stale result',async()=>{
- const ui=app();ui.configure(graph,'shortest');ui.setupFree();ui.element('matchup-purpose').value='lookup';ui.element('matchup-purpose').onchange();
+ const ui=app();ui.configure(graph,'shortest');ui.setupFree();
  for(const [side,query] of [['start','Start'],['end','End']]){ui.element(side+'-search').value=query;ui.element(side+'-search').listeners.input();ui.flushTimers();ui.element(side+'-results').children.find(x=>x.tagName==='button').onclick()}
  const pending=ui.element('lookup-submit').onclick();ui.element('lookup-style').value='road';ui.element('lookup-style').onchange();await pending;
  assert.equal(ui.element('lookup-result').hidden,true);assert.equal(ui.element('lookup-submit').disabled,false);
