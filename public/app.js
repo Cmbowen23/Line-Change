@@ -1,4 +1,4 @@
-import {createEngine,easternDate,puzzleFor,streakFor} from './core.js';
+import {createEngine,easternDate,puzzleFor,streakFor,matchesPlayerName} from './core.js';
 import {allDecades,challengeURL,parseChallenge} from './challenges.js';
 import {portrait,teamLogo,connectionSentence,playerHistory,seasonRanges,difficultyPool,routePosition} from './presentation.js';
 import {rosterFor,canAddPlayer,appendConnection} from './explore.js';
@@ -261,7 +261,7 @@ function renderExplorer(){
 }
 function renderRoster(){
  const view=exploreStack.at(-1);if(view?.kind!=='roster')return;let list=$('explore-roster');if(!list){list=document.createElement('div');list.id='explore-roster';$('explore-content').append(list)}list.replaceChildren();
- const needle=(view.query||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();const ids=rosterFor(data,view.team,view.year,activeDecades()).filter(id=>name(id).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(needle));
+ const ids=rosterFor(data,view.team,view.year,activeDecades()).filter(id=>matchesPlayerName(id,name(id),view.query||''));
  const count=document.createElement('p');count.className='explore-note';count.setAttribute('role','status');count.textContent=ids.length?`${ids.length} ${ids.length===1?'player':'players'}`:'No players match this search.';list.append(count);
  for(const id of ids){const button=document.createElement('button');button.className='roster-player';button.type='button';const body=document.createElement('span'),title=document.createElement('strong'),label=document.createElement('small');title.textContent=name(id);label.textContent=route.includes(id)?'Already used':data.players[id][1]+(id===end?' · Destination':'');body.append(title,label);button.append(portrait(id,name(id)),body);button.onclick=()=>visitExplorer({kind:'player',id,connection:[view.team,view.year]});list.append(button)}
 }

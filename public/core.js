@@ -1,5 +1,11 @@
 import {matchesPosition} from './modes.js';
 export const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,'');
+// NHL records sometimes use a nickname instead of a player's full given name.
+const playerAliases={8458540:['Žigmund Pálffy']};
+export function matchesPlayerName(id,name,query){
+ const needle=normalize(query).trim();
+ return [name,...(playerAliases[id]||[])].some(value=>normalize(value).includes(needle));
+}
 export function createEngine(data,decades=null,{position='any',start=null,end=null}={}){
  if(position!=='any')data={...data,groups:data.groups.map(g=>[g[0],g[1],g[2].filter(id=>id===start||id===end||matchesPosition(data.players[id],position))])};
  const memberships=new Map();
@@ -82,7 +88,7 @@ export function createEngine(data,decades=null,{position='any',start=null,end=nu
   if(!best)return null;
   const {score,...pair}=best;return pair;
  }
- const search=q=>{const needle=normalize(q).trim();if(!needle)return [];return Object.entries(data.players).filter(([id,p])=>memberships.has(Number(id))&&normalize(p[0]).includes(needle)).sort((a,b)=>Number(normalize(b[1][0]).startsWith(needle))-Number(normalize(a[1][0]).startsWith(needle))||a[1][0].localeCompare(b[1][0])).slice(0,12).map(([id,p])=>({id:Number(id),name:p[0],position:p[1],first:p[2],last:p[3]}))};
+ const search=q=>{const needle=normalize(q).trim();if(!needle)return [];return Object.entries(data.players).filter(([id,p])=>memberships.has(Number(id))&&matchesPlayerName(id,p[0],needle)).sort((a,b)=>Number(normalize(b[1][0]).startsWith(needle))-Number(normalize(a[1][0]).startsWith(needle))||a[1][0].localeCompare(b[1][0])).slice(0,12).map(([id,p])=>({id:Number(id),name:p[0],position:p[1],first:p[2],last:p[3]}))};
  const hintTeams=(a,b)=>{const path=shortest(a,b);return path&&path.length>1?[...new Set(evidence(a,path[1]).map(g=>g[0]))]:[]};
  const randomAvailability=new Map();
  function randomMatchup(random=Math.random,pool=null,minShots=2,maxShots=4,restriction='any'){
