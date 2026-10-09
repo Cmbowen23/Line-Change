@@ -57,3 +57,5 @@ header{max-width:800px;padding:18px 24px}.brand{font-size:24px}main{max-width:80
 @media(max-width:480px){.round-score{padding-top:16px;gap:4px}#daily-stars{font-size:38px}#route-target{font-size:17px;margin-top:8px}}
 
 .matchup-purpose{padding:20px 0;border-bottom:1px solid var(--line);margin-bottom:24px}.matchup-purpose select,#lookup-style{width:100%;margin:10px 0 16px}#lookup-result{border-top:1px solid var(--line);margin-top:24px;padding-top:18px}#lookup-summary,#lookup-rules{line-height:1.5}#lookup-chain{padding-top:20px}#lookup-chain .route-player{min-width:0}
+
+.matchup-purpose select,#lookup-style{font:inherit;padding:12px;border:1px solid var(--line);border-radius:5px;background:#fffdf7;color:var(--ink)}
