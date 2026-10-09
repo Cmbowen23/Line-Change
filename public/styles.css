@@ -59,3 +59,5 @@ header{max-width:800px;padding:18px 24px}.brand{font-size:24px}main{max-width:80
 #lookup-style{width:100%;margin:10px 0 16px}#lookup-result{border-top:1px solid var(--line);margin-top:24px;padding-top:18px}#lookup-summary,#lookup-rules{line-height:1.5}#lookup-chain{padding-top:20px}#lookup-chain .route-player{min-width:0}
 
 #lookup-style{font:inherit;padding:12px;border:1px solid var(--line);border-radius:5px;background:#fffdf7;color:var(--ink)}
+
+.lookup-route-option{width:100%;text-align:left;line-height:1.5;font:inherit;padding:10px 12px}.lookup-route-option:hover{background:var(--cream)}#lookup-answers .all-answers{margin-top:24px}

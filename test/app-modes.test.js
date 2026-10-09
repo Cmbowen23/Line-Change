@@ -55,6 +55,18 @@ test('Changing a lookup while it is searching discards its stale result',async()
  const pending=ui.element('lookup-submit').onclick();ui.element('lookup-style').value='road';ui.element('lookup-style').onchange();await pending;
  assert.equal(ui.element('lookup-result').hidden,true);assert.equal(ui.element('lookup-submit').disabled,false);
 });
+test('Shortest lookup lists every option in batches and selecting one updates its visual route',async()=>{
+ const bridges=Array.from({length:25},(_,i)=>i+2),d={...graph,players:{1:['Start','C',20102011,20102011],100:['End','C',20112012,20112012],...Object.fromEntries(bridges.map(id=>[id,['Bridge '+id,'D',20102011,20112012]]))},groups:bridges.flatMap(id=>[['A',20102011,[1,id]],['B',20112012,[id,100]]])};
+ const ui=app();ui.configure(d,'shortest');ui.setupFree();
+ for(const [side,query] of [['start','Start'],['end','End']]){ui.element(side+'-search').value=query;ui.element(side+'-search').listeners.input();ui.flushTimers();ui.element(side+'-results').children.find(x=>x.tagName==='button').onclick()}
+ await ui.element('lookup-submit').onclick();ui.flushTimers();
+ const section=ui.element('lookup-answers').children[0],list=section.children.find(x=>x.className==='answer-list'),more=section.children.find(x=>x.tagName==='button'),progress=section.children.find(x=>x.className==='answer-progress');
+ assert.equal(section.open,true);assert.match(section.textContent,/25 possible shortest routes/);assert.equal(list.children.length,20);assert.equal(more.hidden,false);
+ more.onclick();assert.equal(list.children.length,25);assert.equal(more.hidden,true);assert.equal(progress.textContent,'Showing 25 of 25 routes');
+ const option=list.children[24].children[0];option.onclick();assert.match(option.textContent,/Bridge/);
+ const shown=ui.element('lookup-chain').children.filter(x=>x.dataset.playerId).map(x=>x.textContent);assert.equal(shown.length,3);assert.ok(option.textContent.includes(shown[1].replace('CONNECTION','')));
+ ui.element('lookup-style').value='road';ui.element('lookup-style').onchange();const before=ui.element('lookup-chain').textContent;list.children[0].children[0].onclick();assert.equal(ui.element('lookup-chain').textContent,before);
+});
 test('Custom search finds Palffy outside selected eras and includes his rookie era on selection',()=>{
  const d={...graph,players:{...graph.players,8458540:['Ziggy Palffy','R',19931994,20052006]},groups:[...graph.groups,['A',19931994,[8458540,1]]]};
  const ui=app();ui.configure(d,'career');ui.setupFree();

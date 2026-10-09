@@ -126,8 +126,8 @@ function renderRoute(target=$('chain'),path=route,links=routeLinks,lookupEngine=
   chain.append(link);
  }
 }
-function appendAllAnswers(parent){
- if(longest()){
+function appendAllAnswers(parent,lookup=null){
+ if(!lookup&&longest()){
   const section=document.createElement('section'),heading=document.createElement('h3'),note=document.createElement('p');section.className='all-answers';heading.textContent='Longest route found';note.textContent='Finding a longer valid route…';section.append(heading,note);parent.append(section);
   const generation=revision,seedPath=route.at(-1)===end?{players:[...route],links:[...routeLinks]}:null;
   solve('longest',{decades:selectedDecades,style:gameStyle,start,end,route:[start],links:[],seedPath}).then(answer=>{
@@ -137,19 +137,19 @@ function appendAllAnswers(parent){
   }).catch(error=>{if(section.isConnected)note.textContent=error.message});return;
  }
  const section=document.createElement('details');section.className='all-answers';
- const heading=document.createElement('summary');heading.textContent='All shortest answers';
+ const heading=document.createElement('summary');heading.textContent=lookup?'All shortest routes':'All shortest answers';section.open=Boolean(lookup);
  const summary=document.createElement('p');summary.textContent='Calculating every shortest route…';section.append(heading,summary);parent.append(section);
- const a=start,b=end,currentEngine=engine;
+ const a=lookup?.start??start,b=lookup?.end??end,currentEngine=lookup?.engine??engine;
  // Let the completion message paint before calculating alternatives.
  setTimeout(()=>{
-  if(!section.isConnected)return;
+  if(!section.isConnected||(lookup&&!lookup.current()))return;
   const answers=currentEngine.allShortest(a,b),iterator=answers.routes();
   summary.textContent=`${answers.count.toLocaleString()} possible shortest ${answers.count===1n?'route':'routes'} · ${shotLabel(minimumShots(answers.distance))}. Longer detours are not listed. Team-season variants for the same player chain count as one answer.`;
   const list=document.createElement('ol');list.className='answer-list';
   const progress=document.createElement('p');progress.className='answer-progress';progress.setAttribute('aria-live','polite');
   const more=document.createElement('button');more.className='secondary';more.textContent='Show next 20 answers';
   let shown=0n;
-  function batch(){for(let i=0;i<20;i++){const item=iterator.next();if(item.done)break;const li=document.createElement('li');li.textContent=item.value.map(p=>name(p)).join(' → ');list.append(li);shown++}progress.textContent=`Showing ${shown.toLocaleString()} of ${answers.count.toLocaleString()} routes`;more.hidden=shown>=answers.count;}
+  function batch(){for(let i=0;i<20;i++){const item=iterator.next();if(item.done)break;const li=document.createElement('li'),label=item.value.map(p=>name(p)).join(' → ');if(lookup){const button=document.createElement('button');button.type='button';button.className='lookup-route-option secondary';button.textContent=label;button.setAttribute('aria-label','Show route: '+label);button.onclick=()=>{if(lookup.current())lookup.select(item.value)};li.append(button)}else li.textContent=label;list.append(li);shown++}progress.textContent=`Showing ${shown.toLocaleString()} of ${answers.count.toLocaleString()} routes`;more.hidden=shown>=answers.count;}
   more.onclick=batch;section.append(list,progress,more);batch();
  },0);
 }
@@ -177,7 +177,7 @@ $('lookup-style').onchange=()=>{
 $('lookup-submit').onclick=async()=>{
  if(!selectedStart||!selectedEnd||selectedStart===selectedEnd)return;
  const request=++lookupRequest,a=selectedStart,b=selectedEnd,style=$('lookup-style').value||'shortest';
- $('lookup-submit').disabled=true;$('lookup-result').hidden=true;$('lookup-status').textContent='Finding connections…';
+ $('lookup-submit').disabled=true;$('lookup-result').hidden=true;$('lookup-answers').replaceChildren();$('lookup-status').textContent='Finding connections…';
  try{
   const answer=await solve('lookup',{start:a,end:b,style,decades:allDecades});
   if(request!==lookupRequest)return;
@@ -187,6 +187,12 @@ $('lookup-submit').onclick=async()=>{
   const teams=new Set(links.map(x=>x[0])).size,seasons=new Set(links.map(x=>x[1])).size;
   $('lookup-summary').textContent=`${name(a)} → ${name(b)} · ${players.length} players · ${style==='shortest'?shotLabel(answer.shots):style==='career'?seasons+' seasons':teams+' teams'}${style==='shortest'?'':answer.proven?' · Verified maximum.':' · A longer route may exist.'}`;
   renderRoute($('lookup-chain'),players,links,true);$('lookup-result').hidden=false;
+  if(style==='shortest'){
+   const lookupEngine=createEngine(data);
+   appendAllAnswers($('lookup-answers'),{start:a,end:b,engine:lookupEngine,current:()=>request===lookupRequest,select:option=>{
+    const evidence=option.slice(1).map((id,i)=>lookupEngine.evidence(option[i],id)[0].slice(0,2));renderRoute($('lookup-chain'),option,evidence,true);$('lookup-chain').scrollIntoView?.({behavior:'smooth',block:'center'});
+   }});
+  }
   $('lookup-status').textContent=style==='shortest'?'Every teammate connection is verified.':'Every connection follows the lookup rules. Long-route searches are bounded and show the best route found.';
  }catch(error){if(request===lookupRequest)$('lookup-status').textContent=error.message}
  finally{if(request===lookupRequest)updateCustomButtons()}
