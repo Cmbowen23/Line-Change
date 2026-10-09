@@ -33,11 +33,21 @@ function app(){
   postMessage(request){if(request.type==='init'){this.data=request.data;return}queueMicrotask(()=>{const game=createSnake(this.data,request.decades,request.style);this.onmessage?.({data:{id:request.id,result:request.type==='finish'?game.finish(game.context(request.start,request.end,request.route,request.links)):game.longest(game.context(request.start,request.end,request.route,request.links),{seedPath:request.seedPath,budgetMs:20})}})})}
   terminate(){}
  }
- const bindings={...core,...challenges,...presentation,...explore,...modes,createSnake,document,localStorage,location,history:{replaceState(){}},Worker,URL,confirm:()=>true,navigator:{},setTimeout:()=>0,clearTimeout(){},requestAnimationFrame:fn=>fn(),portrait:()=>new Element('span'),teamLogo:()=>new Element('span')};
+ const timers=[];
+ const bindings={timers,...core,...challenges,...presentation,...explore,...modes,createSnake,document,localStorage,location,history:{replaceState(){}},Worker,URL,confirm:()=>true,navigator:{},setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout(){},requestAnimationFrame:fn=>fn(),portrait:()=>new Element('span'),teamLogo:()=>new Element('span')};
  const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.url/g,"'https://example.com/app.js'").replace(/load\(\);document\.addEventListener\('visibilitychange',[\s\S]*$/,'');
- const api=new Function(...Object.keys(bindings),source+`;return {beginFree,add,daily,openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition}},element:id=>$(id)};`)(...Object.values(bindings));return api;
+ const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},setupFree,beginFree,add,daily,openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition}},element:id=>$(id)};`)(...Object.values(bindings));return api;
 }
 const graph={version:'test',teams:{A:'Team A',B:'Team B',C:'Team C',D:'Team D'},puzzles:[[1,4,3]],players:{1:['Start','C',20102011,20102011],2:['Bridge','D',20102011,20122013],3:['Next','G',20122013,20132014],4:['End','C',20132014,20132014],5:['Trap','D',20102011,20142015],6:['Other','R',20142015,20142015]},groups:[['A',20102011,[1,2,5]],['B',20122013,[2,3]],['C',20132014,[3,4]],['D',20142015,[5,6]]]};
+test('Custom search finds Palffy outside selected eras and includes his rookie era on selection',()=>{
+ const d={...graph,players:{...graph.players,8458540:['Ziggy Palffy','R',19931994,20052006]},groups:[...graph.groups,['A',19931994,[8458540,1]]]};
+ const ui=app();ui.configure(d,'career');ui.setupFree();
+ // Keep only modern eras before searching through the actual autocomplete handler.
+ ui.selectDecades([2010,2020]);
+ ui.element('start-search').value='Žigmund Palffy';ui.element('start-search').listeners.input();ui.flushTimers();
+ const result=ui.element('start-results').children.find(x=>x.tagName==='button');assert.ok(result);assert.match(result.textContent,/Ziggy Palffy/);assert.match(result.textContent,/Include 1990s to select/);
+ result.onclick();assert.equal(ui.element('start-search').value,'Ziggy Palffy');assert.match(ui.element('setup-status').textContent,/Included 1990s.*rookie season/);
+});
 test('Career Run app ends a dead run, shows restart, blocks undo, and resets the same matchup',()=>{
  const ui=app();ui.configure(graph,'career');assert.equal(ui.beginFree(1,4),true);assert.equal(ui.element('undo').hidden,true);
  ui.element('close-intro').onclick();ui.add(5,['A',20102011]);assert.equal(ui.state().lost,true);assert.equal(ui.state().finished,true);assert.equal(ui.element('completion').open,true);assert.equal(ui.element('completion-title').textContent,'Run over.');assert.equal(ui.element('completion-restart').hidden,false);assert.equal(ui.element('completion-share').hidden,true);
