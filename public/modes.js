@@ -36,3 +36,5 @@ export function playersFromEras(data,decades,pool=null){
 export function minimumShots(connections){return Math.max(1,connections-1)}
 export function shortestShots(route,end){return route.at(-1)===end?minimumShots(route.length-1):Math.max(0,route.length-1)}
 export function shotLabel(shots){return `${shots} ${shots===1?'shot':'shots'}`}
+
+export function dailyStars(shots,shortest,revealed=false){return revealed?0:Math.max(1,3-Math.max(0,shots-shortest))}

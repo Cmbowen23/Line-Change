@@ -28,7 +28,7 @@ class Element{
 function app(){
  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8'),elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(x=>[x[1],new Element()]));
  const document={getElementById:id=>{assert.ok(elements.has(id),'Missing HTML element '+id);return elements.get(id)},createElement:tag=>new Element(tag),createTextNode:text=>text,addEventListener(){}};
- const storage=new Map(),location={href:'https://example.com/',origin:'https://example.com'},localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
+ const storage=new Map([['line-change-explore','false'],['line-change-daily-explore','false']]),location={href:'https://example.com/',origin:'https://example.com'},localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
  class Worker{
   postMessage(request){if(request.type==='init'){this.data=request.data;return}queueMicrotask(()=>{const game=createSnake(this.data,request.decades,request.style);this.onmessage?.({data:{id:request.id,result:request.type==='finish'?game.finish(game.context(request.start,request.end,request.route,request.links)):game.longest(game.context(request.start,request.end,request.route,request.links),{seedPath:request.seedPath,budgetMs:20})}})})}
   terminate(){}
@@ -79,16 +79,15 @@ test('Career Run player history advances its bold years and greys out every earl
  ui.openExplorer({kind:'player',id:3});const discovery=ui.element('explore-content').querySelectorAll('*');assert.deepEqual(discovery.filter(x=>x.tagName==='button'&&x.className==='season-link').map(x=>x.textContent),['2013–14']);assert.ok(discovery.some(x=>x.className==='outside-years'&&x.textContent==='2012–13'));assert.match(ui.element('explore-step').textContent,/later season than 2012–13/);
 });
 
-test('every round prominently displays its active rules and clears restrictions when switching back to Daily',()=>{
- const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,2,3]],['B',20112012,[2,4]],['C',20112012,[3,4]]]};const ui=app();
- ui.configure(d,'shortest','goalie');ui.beginFree(1,4);assert.equal(ui.element('round-rules-title').textContent,'Goalies only');assert.equal(ui.element('round-target').textContent,'MINIMUM 1 SHOT');assert.match(ui.element('round-rule-list').textContent,/Only goalies/);assert.match(ui.element('round-rule-list').textContent,/unrestricted/);assert.equal(ui.element('era-summary').textContent,'Matchup player eras: 2010s · All seasons allowed for connections.');
- ui.configure(d,'shortest','defense');ui.beginFree(1,4);assert.equal(ui.element('round-rules-title').textContent,'Defensemen only');assert.doesNotMatch(ui.element('round-rule-list').textContent,/goalies/);
- ui.configure(graph,'career');ui.beginFree(1,4);assert.match(ui.element('round-rule-list').textContent,/rookie season, 2010–11/);assert.match(ui.element('round-rule-list').textContent,/End in 2013–14/);assert.match(ui.element('round-rule-list').textContent,/dead end ends the round/);
- ui.daily();assert.equal(ui.element('round-rules-title').textContent,'Shortest chain');assert.match(ui.element('round-rule-list').textContent,/any NHL player/);assert.doesNotMatch(ui.element('round-rule-list').textContent,/rookie|defensemen|goalies/);assert.equal(ui.element('free-controls').hidden,true);
+test('the compact board shows the route target and keeps rules in help rather than above players',()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,4);assert.equal(ui.element('route-target').textContent,'Shortest route: 2 shots');assert.equal(ui.element('par').hidden,true);assert.equal(ui.element('daily-stars').hidden,true);
+ ui.configure(graph,'career');ui.beginFree(1,4);assert.match(ui.element('route-target').textContent,/Start 2010–11 → End 2013–14/);
+ ui.daily();assert.equal(ui.element('route-target').textContent,'Shortest route: 2 shots');assert.equal(ui.element('daily-stars').hidden,false);assert.equal(ui.element('free-controls').hidden,true);
+ const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');assert.doesNotMatch(html,/id="round-rules"|id="explore-mode"|id="daily-explore-mode"|Small world|Big league/);assert.match(html,/Or type a player’s name/);
 });
 
 test('Shortest Chain era selection limits endpoints while old connections, histories and rosters remain playable',()=>{
- const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,5]],['B',20102011,[4,6]],['C',19901991,[1,2]],['D',19801981,[2,4]]]};const ui=app();ui.configure(d,'shortest','defense');assert.equal(ui.beginFree(1,4),true);assert.equal(ui.element('round-target').textContent,'MINIMUM 1 SHOT');
+ const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,5]],['B',20102011,[4,6]],['C',19901991,[1,2]],['D',19801981,[2,4]]]};const ui=app();ui.configure(d,'shortest','defense');assert.equal(ui.beginFree(1,4),true);assert.equal(ui.element('route-target').textContent,'Shortest route: 1 shot');
  const details=new Element('details');ui.fillTeamDetails(details,1);assert.ok(details.querySelectorAll('*').some(x=>x.tagName==='button'&&x.textContent==='1990–91'));assert.equal(details.querySelectorAll('*').some(x=>x.className==='endpoint-years outside-years'),false);
  ui.openExplorer({kind:'player',id:1});assert.ok(ui.element('explore-content').querySelectorAll('*').some(x=>x.tagName==='button'&&x.textContent==='1990–91'));
  ui.add(2,['C',19901991]);assert.deepEqual(ui.state().route,[1,2,4]);assert.equal(ui.state().finished,true);
@@ -98,13 +97,25 @@ test('Shortest Chain era selection limits endpoints while old connections, histo
 
 test('Shortest Chain counts player additions, with no extra shot for the automatic destination link',()=>{
  const ui=app();ui.configure(graph,'shortest');assert.equal(ui.beginFree(1,4),true);
- assert.equal(ui.element('game-goal').textContent,'0 shots taken');assert.equal(ui.element('par').textContent,'MINIMUM 2 SHOTS');
+ assert.equal(ui.element('game-goal').textContent,'0 shots taken');assert.equal(ui.element('route-target').textContent,'Shortest route: 2 shots');
  ui.add(2);assert.deepEqual(ui.state().route,[1,2]);assert.equal(ui.element('game-goal').textContent,'1 shot taken');
  ui.element('undo').onclick();assert.equal(ui.element('game-goal').textContent,'0 shots taken');ui.add(2);ui.add(3);
- assert.deepEqual(ui.state().route,[1,2,3,4]);assert.equal(ui.element('game-goal').textContent,'2 shots taken');assert.equal(ui.element('completion-shots').textContent,'2 shots');assert.equal(ui.element('completion-minimum').textContent,'Minimum possible: 2 shots');assert.match(ui.element('result').textContent,/2 SHOTS · MINIMUM 2/);
- ui.daily();assert.equal(ui.element('par').textContent,'MINIMUM 2 SHOTS');ui.add(2);ui.add(3);assert.equal(ui.element('completion-shots').textContent,'2 shots');ui.daily();assert.equal(ui.element('game-goal').textContent,'2 shots taken');
+ assert.deepEqual(ui.state().route,[1,2,3,4]);assert.equal(ui.element('game-goal').textContent,'2 shots taken');assert.equal(ui.element('completion-shots').textContent,'2 shots');assert.equal(ui.element('completion-minimum').textContent,'Shortest route: 2 shots');assert.match(ui.element('result').textContent,/2 SHOTS/);
+ ui.daily();assert.equal(ui.element('route-target').textContent,'Shortest route: 2 shots');ui.add(2);ui.add(3);assert.equal(ui.element('completion-shots').textContent,'2 shots');ui.daily();assert.equal(ui.element('game-goal').textContent,'2 shots taken');
 });
 test('direct teammates still take one shot and revealed Shortest Chain answers use player-addition scoring',()=>{
- const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,2);assert.equal(ui.element('par').textContent,'MINIMUM 1 SHOT');ui.add(2);assert.equal(ui.element('completion-shots').textContent,'1 shot');assert.equal(ui.element('completion-minimum').textContent,'Minimum possible: 1 shot');
- ui.beginFree(1,4);ui.element('give-up').onclick();assert.match(ui.element('result').textContent,/2 SHOTS · MINIMUM 2/);assert.equal(ui.element('game-goal').textContent,'2 shots taken');
+ const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,2);assert.equal(ui.element('route-target').textContent,'Shortest route: 1 shot');ui.add(2);assert.equal(ui.element('completion-shots').textContent,'1 shot');assert.equal(ui.element('completion-minimum').textContent,'Shortest route: 1 shot');
+ ui.beginFree(1,4);ui.element('give-up').onclick();assert.match(ui.element('result').textContent,/2 SHOTS/);assert.equal(ui.element('game-goal').textContent,'2 shots taken');
+});
+
+test('daily stars decrease with extra player additions, persist on reload, and revealing earns none',()=>{
+ const d={...graph,puzzles:[[1,4,2]],groups:[['A',20102011,[1,2]],['B',20102011,[2,4]],['C',20102011,[1,5]],['D',20102011,[5,6]],['E',20102011,[6,3]],['F',20102011,[3,4]],['G',20102011,[5,3]]]};
+ for(const [path,stars] of [[[2],3],[[5,3],2],[[5,6,3],1]]){
+  const ui=app();ui.configure(d,'shortest');ui.daily();assert.equal(ui.element('daily-stars')['aria-label'],'3 stars available');
+  for(const id of path)ui.add(id);assert.equal(ui.state().finished,true);assert.equal(ui.element('daily-stars')['aria-label'],`${stars} stars earned`);assert.equal(ui.element('completion-stars')['aria-label'],`${stars} stars earned`);assert.match(ui.element('result').textContent,new RegExp(stars+' STARS'));ui.daily();assert.equal(ui.element('daily-stars')['aria-label'],`${stars} stars earned`);
+ }
+ const ui=app();ui.configure(d,'shortest');ui.daily();ui.add(5);ui.add(6);assert.equal(ui.element('daily-stars')['aria-label'],'2 stars available');ui.element('undo').onclick();assert.equal(ui.element('daily-stars')['aria-label'],'3 stars available');ui.element('give-up').onclick();assert.equal(ui.element('daily-stars')['aria-label'],'Answer revealed — no stars');assert.doesNotMatch(ui.element('result').textContent,/3 STARS/);
+});
+test('season exploration stays available even when legacy saved toggles are disabled',()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.daily();ui.openExplorer({kind:'player',id:1});assert.equal(ui.element('explorer').open,true);assert.equal(ui.element('explore-title').textContent,'Start');assert.equal(ui.element('roster-hint').hidden,false);assert.equal(ui.element('player-hint').hidden,false);
 });
