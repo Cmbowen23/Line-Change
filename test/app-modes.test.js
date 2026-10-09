@@ -7,6 +7,7 @@ import * as presentation from '../public/presentation.js';
 import * as explore from '../public/explore.js';
 import * as modes from '../public/modes.js';
 import {createSnake} from '../public/snake.js';
+import {lookupConnection} from '../public/lookup.js';
 
 // A small DOM double exercises the actual app handlers without a browser,
 // network access, or changing anyone's saved daily attempt.
@@ -30,7 +31,7 @@ function app(){
  const document={getElementById:id=>{assert.ok(elements.has(id),'Missing HTML element '+id);return elements.get(id)},createElement:tag=>new Element(tag),createTextNode:text=>text,addEventListener(){}};
  const storage=new Map([['line-change-explore','false'],['line-change-daily-explore','false']]),location={href:'https://example.com/',origin:'https://example.com'},localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
  class Worker{
-  postMessage(request){if(request.type==='init'){this.data=request.data;return}queueMicrotask(()=>{const game=createSnake(this.data,request.decades,request.style);this.onmessage?.({data:{id:request.id,result:request.type==='finish'?game.finish(game.context(request.start,request.end,request.route,request.links)):game.longest(game.context(request.start,request.end,request.route,request.links),{seedPath:request.seedPath,budgetMs:20})}})})}
+  postMessage(request){if(request.type==='init'){this.data=request.data;return}queueMicrotask(()=>{if(request.type==='lookup'){this.onmessage?.({data:{id:request.id,result:lookupConnection(this.data,request)}});return}const game=createSnake(this.data,request.decades,request.style);this.onmessage?.({data:{id:request.id,result:request.type==='finish'?game.finish(game.context(request.start,request.end,request.route,request.links)):game.longest(game.context(request.start,request.end,request.route,request.links),{seedPath:request.seedPath,budgetMs:20})}})})}
   terminate(){}
  }
  const timers=[];
@@ -39,6 +40,22 @@ function app(){
  const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},setupFree,beginFree,add,daily,openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition}},element:id=>$(id)};`)(...Object.values(bindings));return api;
 }
 const graph={version:'test',teams:{A:'Team A',B:'Team B',C:'Team C',D:'Team D'},puzzles:[[1,4,3]],players:{1:['Start','C',20102011,20102011],2:['Bridge','D',20102011,20122013],3:['Next','G',20122013,20132014],4:['End','C',20132014,20132014],5:['Trap','D',20102011,20142015],6:['Other','R',20142015,20142015]},groups:[['A',20102011,[1,2,5]],['B',20122013,[2,3]],['C',20132014,[3,4]],['D',20142015,[5,6]]]};
+test('Lookup renders an answer without modifying the chain or opening completion',async()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.daily();const before=ui.state();ui.setupFree();
+ ui.element('matchup-purpose').value='lookup';ui.element('matchup-purpose').onchange();
+ assert.equal(ui.element('matchup-game-options').hidden,true);assert.equal(ui.element('custom-actions').hidden,true);
+ for(const [side,query] of [['start','Start'],['end','End']]){ui.element(side+'-search').value=query;ui.element(side+'-search').listeners.input();ui.flushTimers();ui.element(side+'-results').children.find(x=>x.tagName==='button').onclick()}
+ assert.equal(ui.element('lookup-submit').disabled,false);
+ await ui.element('lookup-submit').onclick();assert.equal(ui.element('lookup-result').hidden,false);assert.equal(ui.element('lookup-heading').textContent,'Shortest route');assert.match(ui.element('lookup-summary').textContent,/2 shots/);
+ assert.equal(ui.element('lookup-chain').children.filter(x=>x.dataset.playerId).length,4);assert.deepEqual(ui.state(),before);assert.equal(ui.element('completion').open,false);
+ for(const style of ['career','road']){ui.element('lookup-style').value=style;ui.element('lookup-style').onchange();await ui.element('lookup-submit').onclick();assert.equal(ui.element('lookup-result').hidden,false);assert.match(ui.element('lookup-summary').textContent,style==='career'?/3 seasons/:/3 teams/)}
+});
+test('Changing a lookup while it is searching discards its stale result',async()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.setupFree();ui.element('matchup-purpose').value='lookup';ui.element('matchup-purpose').onchange();
+ for(const [side,query] of [['start','Start'],['end','End']]){ui.element(side+'-search').value=query;ui.element(side+'-search').listeners.input();ui.flushTimers();ui.element(side+'-results').children.find(x=>x.tagName==='button').onclick()}
+ const pending=ui.element('lookup-submit').onclick();ui.element('lookup-style').value='road';ui.element('lookup-style').onchange();await pending;
+ assert.equal(ui.element('lookup-result').hidden,true);assert.equal(ui.element('lookup-submit').disabled,false);
+});
 test('Custom search finds Palffy outside selected eras and includes his rookie era on selection',()=>{
  const d={...graph,players:{...graph.players,8458540:['Ziggy Palffy','R',19931994,20052006]},groups:[...graph.groups,['A',19931994,[8458540,1]]]};
  const ui=app();ui.configure(d,'career');ui.setupFree();
