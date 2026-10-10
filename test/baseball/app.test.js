@@ -31,7 +31,7 @@ function app(){
  const document={getElementById:id=>{assert.ok(elements.has(id),'Missing HTML element '+id);return elements.get(id)},createElement:tag=>new Element(tag),createTextNode:text=>text,addEventListener(){}};
  const storage=new Map([['baseball-connections-explore','false'],['baseball-connections-daily-explore','false']]),location={href:'https://example.com/baseball/',origin:'https://example.com'},localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
  class Worker{
-  postMessage(request){if(request.type==='init'){this.data=request.data;return}queueMicrotask(()=>{if(request.type==='lookup'){this.onmessage?.({data:{id:request.id,result:lookupConnection(this.data,request)}});return}const game=createSnake(this.data,request.decades,request.style);this.onmessage?.({data:{id:request.id,result:request.type==='finish'?game.finish(game.context(request.start,request.end,request.route,request.links)):game.longest(game.context(request.start,request.end,request.route,request.links),{seedPath:request.seedPath,budgetMs:20})}})})}
+  postMessage(request){if(request.type==='init'){this.data=request.data;return}queueMicrotask(()=>{if(request.type==='lookup'){this.onmessage?.({data:{id:request.id,result:lookupConnection(this.data,request)}});return}const game=createSnake(this.data,request.decades,request.style);this.onmessage?.({data:{id:request.id,result:request.type==='finish'?game.finish(game.context(request.start,request.end,request.route,request.links)):game.longest(game.context(request.start,request.end,request.route,request.links),{seedPath:request.seedPath,budgetMs:this.data.targetBudget??20})}})})}
   terminate(){}
  }
  const timers=[];
@@ -88,4 +88,11 @@ test('Completed daily results survive reversed endpoint ordering',()=>{
  const ui=app();ui.configure({...graph,puzzles:[[4,1,graph.puzzles[0][2]]]},'shortest');ui.daily();
  const route=graph.players[3][0]==='Next'?[4,3,2,1]:[4,2,1];
  ui.seedDaily({route,finished:true,revealed:false,hintsUsed:2});ui.daily();assert.equal(ui.state().finished,true);assert.deepEqual(ui.state().route,[...route].reverse());assert.match(ui.element('result').textContent,/2 hints used/);
+});
+
+test('Random-game route target shows a proven maximum or an explicitly bounded longest result',async()=>{
+ const ui=app();ui.configure(graph,'career');ui.beginFree(1,4);assert.equal(ui.element('route-target').textContent,'Finding longest route…');
+ await new Promise(resolve=>setImmediate(resolve));assert.match(ui.element('route-target').textContent,/Longest possible route: \d+ (shots|moves)/);assert.match(ui.element('route-target-note').textContent,/Verified maximum/);
+ const bounded=app();bounded.configure({...graph,targetBudget:0},'road');bounded.beginFree(1,4);await new Promise(resolve=>setImmediate(resolve));assert.match(bounded.element('route-target').textContent,/Longest route found: \d+ (shots|moves)/);assert.match(bounded.element('route-target-note').textContent,/longer route may exist/);
+ ui.configure(graph,'career');ui.beginFree(1,4);ui.daily();const target=ui.element('route-target').textContent;await new Promise(resolve=>setImmediate(resolve));assert.equal(ui.element('route-target').textContent,target);assert.match(target,/Shortest route/);assert.equal(ui.element('route-target-note').hidden,true);
 });

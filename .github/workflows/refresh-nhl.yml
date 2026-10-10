@@ -1,0 +1,32 @@
+name: Refresh NHL current season
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [scripts/refresh-current-nhl.py, .github/workflows/refresh-nhl.yml]
+permissions:
+  contents: write
+concurrency:
+  group: refresh-nhl-current-season
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Refresh official NHL appearances
+        run: python3 scripts/refresh-current-nhl.py
+      - name: Validate both sports
+        run: python3 -m unittest discover -s test -p 'test_nhl_refresh.py' && npm test && npm run build
+      - name: Commit validated roster snapshot
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/data/hockey.json public/data/player-depth.json public/data/daily-puzzles.json public/index.html source-data/players.csv source-data/player_seasons.csv source-data/current-season.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Refresh current-season NHL appearance data'
+            git push
+          fi

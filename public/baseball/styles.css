@@ -63,3 +63,5 @@ header{max-width:800px;padding:18px 24px}.brand{font-size:24px}main{max-width:80
 .lookup-route-option{width:100%;text-align:left;line-height:1.5;font:inherit;padding:10px 12px}.lookup-route-option:hover{background:var(--cream)}#lookup-answers .all-answers{margin-top:24px}
 
 .brand-name{line-height:1.05;font-size:18px;letter-spacing:.3px}.brand .puck{background:#fffdf7;color:var(--red);border:2px solid var(--red)}@media(max-width:480px){.brand-name{font-size:14px}}
+
+.route-target-note{font-size:12px;line-height:1.4;margin:6px 0 0;color:var(--muted);font-weight:400}

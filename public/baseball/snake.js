@@ -111,7 +111,7 @@ export function createSnake(data,decades,style='open'){
   let best=initial,nodes=0,complete=true;const deadline=Date.now()+budgetMs;
   const used=new Set(c.links.map(key)),players=[c.route.at(-1)],links=[],blocked=new Set(c.route);
   const upper=style==='career'?new Set(groups.filter(g=>g[1]<=(c.bounds.last??0)&&g[1]>=(c.bounds.first??Infinity)).map(g=>g[1])).size-c.links.length:Math.min(memberships.size-c.route.length,new Set(groups.map(key)).size-used.size);
-  const openUpper=style==='open'?Math.min(upper,[...new Set(groups.map(g=>g[0]))].reduce((n,t)=>n+Math.max(0,2-c.links.filter(g=>g[0]===t).length),0),[...new Set(groups.map(g=>g[1]))].reduce((n,y)=>n+Math.max(0,3-c.links.filter(g=>g[1]===y).length),0)):upper;
+  const openUpper=style==='open'?Math.min(upper,[...new Set(groups.map(g=>g[0]))].reduce((n,t)=>n+Math.max(0,2-c.links.filter(g=>g[0]===t).length),0),[...new Set(groups.map(g=>g[1]))].reduce((n,y)=>n+Math.max(0,3-c.links.filter(g=>g[1]===y).length),0)):style==='road'?Math.min(upper,new Set(groups.map(g=>g[0])).size-new Set(c.links.map(g=>g[0])).size):upper;
   function options(id){
    const state={...c,route:[...c.route.slice(0,-1),...players],links:[...c.links,...links]},out=[];
    for(const gi of memberships.get(id)||[]){const g=groups[gi];if(used.has(key(g))||!groupAllowed(g,state))continue;for(const next of g[2])if(!blocked.has(next)&&(style!=='career'||next!==c.end||g[1]===c.bounds.last))out.push({next,g})}
