@@ -66,3 +66,12 @@ Career Run histories follow the current chain season: only later eligible years 
 Typography uses bundled Bungee for jersey-style display headings and Barlow for readable player names, controls, and career histories. Font licenses are included under `public/fonts/`; no external font requests are required.
 
 The board prioritizes the player chain and season explorer. The logo replaces the hero text; rules live in the first-visit dialog and How to play. Season exploration is always available, including for users with legacy disabled toggles. A compact target reads “Shortest route: X shots.” Daily games show three stars for the shortest route, two for one extra shot, and one for two or more extra shots; hints and browsing do not change the rating, and revealed answers earn no stars. The rating is recalculated from saved daily progress and included in shared results. Alternative shortest answers are collapsed by default. Free-play new-game, restart, share and matchup controls sit below the play box.
+
+
+## Baseball tab
+
+The sport tabs navigate between Hockey at `/` and Baseball at `/baseball/` on the same Cloudflare deployment. Each page loads only its own player dataset and game code. Hockey retains its existing `line-change-*` saved progress; baseball uses `baseball-connections-*` keys, with separate settings, daily attempts and streaks. Baseball links preserve the `/baseball/` path.
+
+Baseball includes shortest chains, stars, season exploration, custom/shareable matchups, connection lookup with all shortest routes, and the three Snake styles. Reveal uses an in-game confirmation. Coverage is MLB regular-season appearances from 1970 through 2025: 11,428 players, 1,564 team-seasons, and 730 verified daily matchups. The source is the official MLB Stats API, with per-team year-by-year appearance splits so traded players retain every club. The snapshot is static. Same team-season appearances count even when traded players' exact roster dates did not overlap. Career Run starts at the first season recorded in this coverage. Primary positions are not season-specific. Historical team names follow season metadata; logos may show the current franchise design.
+
+Baseball portraits and logos use `img.mlbstatic.com` and `www.mlbstatic.com`; these image hosts are allowed alongside the existing NHL host. Both sports reuse the bundled fonts. Tests in `test/baseball/` exercise the MLB game independently.

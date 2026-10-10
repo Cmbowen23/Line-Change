@@ -2,6 +2,9 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://assets.nhle.com; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://assets.nhle.com https://img.mlbstatic.com https://www.mlbstatic.com; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'
 /data/hockey.json
+  Cache-Control: public, max-age=3600
+
+/baseball/data/baseball.json
   Cache-Control: public, max-age=3600
