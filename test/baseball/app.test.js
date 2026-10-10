@@ -28,7 +28,7 @@ class Element{
 }
 function app(){
  const html=readFileSync(new URL('../../public/baseball/index.html',import.meta.url),'utf8'),elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(x=>[x[1],new Element()]));
- const document={getElementById:id=>{assert.ok(elements.has(id),'Missing HTML element '+id);return elements.get(id)},createElement:tag=>new Element(tag),createTextNode:text=>text,addEventListener(){}};
+ const document={getElementById:id=>{const found=elements.get(id)||[...elements.values()].flatMap(x=>x.querySelectorAll('*')).find(x=>x.id===id);if(!found&&id==='explore-roster')return null;assert.ok(found,'Missing HTML element '+id);return found},createElement:tag=>new Element(tag),createTextNode:text=>text,addEventListener(){}};
  const storage=new Map([['baseball-connections-explore','false'],['baseball-connections-daily-explore','false']]),location={href:'https://example.com/baseball/',origin:'https://example.com'},localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
  class Worker{
   postMessage(request){if(request.type==='init'){this.data=request.data;return}queueMicrotask(()=>{if(request.type==='lookup'){this.onmessage?.({data:{id:request.id,result:lookupConnection(this.data,request)}});return}const game=createSnake(this.data,request.decades,request.style);this.onmessage?.({data:{id:request.id,result:request.type==='finish'?game.finish(game.context(request.start,request.end,request.route,request.links)):game.longest(game.context(request.start,request.end,request.route,request.links),{seedPath:request.seedPath,budgetMs:this.data.targetBudget??20})}})})}
@@ -40,6 +40,16 @@ function app(){
  const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},seedDaily(record){write(key(),record)},setupFree,beginFree,add,daily,share,sharedText(){return navigator.clipboard.lastText},openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition,revealed}},element:id=>$(id)};`)(...Object.values(bindings));return api;
 }
 const graph={version:'test-mlb',teams:{A:'Club A',B:'Club B',C:'Club C'},puzzles:[[1,4,2]],players:{1:['Start','SS',20102010,20102010],2:['Pitcher','P',20102010,20122012],3:['Outfielder','CF',20102010,20122012],4:['End','C',20122012,20122012]},groups:[['A',20102010,[1,2,3]],['B',20122012,[2,4]],['C',20122012,[3,4]]]};
+test('Position rules stay visible in baseball rosters with eligible players first and the destination exempt',()=>{
+ const d={...graph,groups:[['A',20102010,[1,2,3,4]],['B',20122012,[2,4]]]};
+ const ui=app();ui.configure(d,'shortest','pitcher');assert.equal(ui.beginFree(1,4),true);
+ assert.equal(ui.element('round-rule').hidden,false);assert.equal(ui.element('round-rule-title').textContent,'Pitchers only');
+ ui.openExplorer({kind:'roster',team:'A',year:20102010});assert.match(ui.element('explore-position-rule').textContent,/Pitchers only.*endpoints unrestricted/);
+ const rows=ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.filter(x=>x.tagName==='button');assert.deepEqual(rows.map(x=>x.dataset.playerId),[4,2,3,1]);
+ assert.ok(!rows[0].className.includes('position-excluded'));const excluded=rows.find(x=>x.dataset.playerId===3);assert.match(excluded.className,/position-excluded/);excluded.onclick();assert.equal(ui.element('explore-title').textContent,'Outfielder');
+ const profile=ui.element('explore-content').children.find(x=>x.className==='explore-profile');assert.equal(profile.children.find(x=>x.tagName==='button').disabled,true);
+ ui.daily();assert.equal(ui.element('round-rule').hidden,true);ui.openExplorer({kind:'roster',team:'A',year:20102010});assert.equal(ui.element('explore-position-rule').hidden,true);
+});
 test('Baseball game enforces positions, auto-completes in one move, and restores daily Open Roster',()=>{
  const ui=app();ui.configure(graph,'shortest','pitcher');assert.equal(ui.beginFree(1,4),true);ui.add(3);assert.deepEqual(ui.state().route,[1]);ui.add(2);assert.deepEqual(ui.state().route,[1,2,4]);assert.equal(ui.element('completion-moves').textContent,'1 move');ui.daily();assert.equal(ui.state().gamePosition,'any');assert.equal(ui.element('daily-stars').hidden,false);
 });

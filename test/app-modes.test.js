@@ -28,7 +28,7 @@ class Element{
 }
 function app(){
  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8'),elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(x=>[x[1],new Element()]));
- const document={getElementById:id=>{assert.ok(elements.has(id),'Missing HTML element '+id);return elements.get(id)},createElement:tag=>new Element(tag),createTextNode:text=>text,addEventListener(){}};
+ const document={getElementById:id=>{const found=elements.get(id)||[...elements.values()].flatMap(x=>x.querySelectorAll('*')).find(x=>x.id===id);if(!found&&id==='explore-roster')return null;assert.ok(found,'Missing HTML element '+id);return found},createElement:tag=>new Element(tag),createTextNode:text=>text,addEventListener(){}};
  const storage=new Map([['line-change-explore','false'],['line-change-daily-explore','false']]),location={href:'https://example.com/',origin:'https://example.com'},localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
  class Worker{
   postMessage(request){if(request.type==='init'){this.data=request.data;return}queueMicrotask(()=>{if(request.type==='lookup'){this.onmessage?.({data:{id:request.id,result:lookupConnection(this.data,request)}});return}const game=createSnake(this.data,request.decades,request.style);this.onmessage?.({data:{id:request.id,result:request.type==='finish'?game.finish(game.context(request.start,request.end,request.route,request.links)):game.longest(game.context(request.start,request.end,request.route,request.links),{seedPath:request.seedPath,budgetMs:this.data.targetBudget??20})}})})}
@@ -40,6 +40,20 @@ function app(){
  const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},seedDaily(record){write(key(),record)},setupFree,beginFree,add,daily,openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition}},element:id=>$(id)};`)(...Object.values(bindings));return api;
 }
 const graph={version:'test',teams:{A:'Team A',B:'Team B',C:'Team C',D:'Team D'},puzzles:[[1,4,3]],players:{1:['Start','C',20102011,20102011],2:['Bridge','D',20102011,20122013],3:['Next','G',20122013,20132014],4:['End','C',20132014,20132014],5:['Trap','D',20102011,20142015],6:['Other','R',20142015,20142015]},groups:[['A',20102011,[1,2,5]],['B',20122013,[2,3]],['C',20132014,[3,4]],['D',20142015,[5,6]]]};
+test('Position rules stay visible and roster browsing sorts and mutes excluded positions without blocking the destination',()=>{
+ const d={...graph,groups:[['A',20102011,[1,2,3,4]],['B',20112012,[2,3,4]]]};
+ const ui=app();ui.configure(d,'shortest','goalie');assert.equal(ui.beginFree(1,4),true);
+ assert.equal(ui.element('round-rule').hidden,false);assert.equal(ui.element('round-rule-title').textContent,'Goalies only');
+ ui.openExplorer({kind:'roster',team:'A',year:20102011});assert.equal(ui.element('explore-position-rule').hidden,false);assert.match(ui.element('explore-position-rule').textContent,/Goalies only.*endpoints unrestricted/);
+ const rows=ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.filter(x=>x.tagName==='button');
+ assert.deepEqual(rows.map(x=>x.dataset.playerId),[4,3,2,1]);
+ assert.ok(!rows[0].className.includes('position-excluded'));assert.match(rows[0].textContent,/Destination/);
+ const excluded=rows.find(x=>x.dataset.playerId===2);assert.match(excluded.className,/position-excluded/);assert.match(excluded.textContent,/D.*Outside this round/);
+ excluded.onclick();assert.equal(ui.element('explore-title').textContent,'Bridge');const profile=ui.element('explore-content').children.find(x=>x.className==='explore-profile');assert.equal(profile.children.find(x=>x.tagName==='button').disabled,true);
+ ui.configure(d,'shortest','defense');ui.beginFree(1,4);assert.equal(ui.element('round-rule-title').textContent,'Defensemen only');
+ ui.daily();assert.equal(ui.element('round-rule').hidden,true);ui.openExplorer({kind:'roster',team:'A',year:20102011});assert.equal(ui.element('explore-position-rule').hidden,true);
+ ui.configure(d,'road','goalie');ui.beginFree(1,4);assert.equal(ui.element('round-rule').hidden,true);
+});
 test('Lookup renders an answer without modifying the chain or opening completion',async()=>{
  const ui=app();ui.configure(graph,'shortest');ui.daily();const before=ui.state();ui.setupFree();
  assert.equal(ui.element('lookup-options').hidden,true);assert.equal(ui.element('lookup-open').disabled,true);assert.ok(!ui.element('custom-actions').hidden);
