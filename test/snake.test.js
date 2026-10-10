@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createSnake,randomSnake} from '../public/snake.js';
 import {snakeScore,matchesPosition,playersFromEras,minimumShots,shortestShots,shotLabel} from '../public/modes.js';
-import {createEngine} from '../public/core.js';
+import {createEngine,orderMatchup} from '../public/core.js';
 import {challengeURL,parseChallenge,allDecades} from '../public/challenges.js';
 import {difficultyPool} from '../public/presentation.js';
 const tiny={players:{1:['Start','C'],2:['Bridge','D'],3:['Next','G'],4:['End','C'],5:['Trap','D'],6:['Other','R']},groups:[['A',20102011,[1,2,5]],['B',20122013,[2,3]],['A',20132014,[3,4]],['C',20112012,[2,3]],['D',20142015,[5,6]]]};
@@ -112,7 +112,7 @@ test('the generation worker uses era-filtered endpoints with unrestricted Shorte
  const data={players:{1:['Start','C'],2:['Old bridge','D'],3:['End','C'],4:['Era teammate','R'],5:['Other era teammate','R'],6:['Second old bridge','D']},groups:[['A',20102011,[1,4]],['B',20102011,[3,5]],['C',19901991,[1,2]],['D',19801981,[2,6]],['E',19811982,[6,3]]]};
  const messages=[],self={postMessage:message=>messages.push(message)},randomMath=Object.create(Math);randomMath.random=()=>.4;
  const source=readFileSync(new URL('../public/solver-worker.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
- new Function('createEngine','createSnake','randomSnake','allDecades','playersFromEras','minimumShots','self','Math',source)(createEngine,createSnake,randomSnake,allDecades,playersFromEras,minimumShots,self,randomMath);
+ new Function('orderMatchup','createEngine','createSnake','randomSnake','allDecades','playersFromEras','minimumShots','self','Math',source)(orderMatchup,createEngine,createSnake,randomSnake,allDecades,playersFromEras,minimumShots,self,randomMath);
  self.onmessage({data:{type:'init',data}});self.onmessage({data:{id:1,type:'random',style:'shortest',decades:[2010],pool:[1,2,3],position:'defense'}});
  const pair=messages[0].result;assert.ok(pair);assert.equal(pair.par,2);assert.equal(minimumShots(createEngine(data,allDecades,{position:'defense',start:pair.start,end:pair.end}).shortest(pair.start,pair.end).length-1),pair.par);assert.ok([1,3].includes(pair.start)&&[1,3].includes(pair.end));
  self.onmessage({data:{id:2,type:'random',style:'open',decades:[2010],pool:[1,3]}});assert.equal(messages[1].result,null);
@@ -136,7 +136,7 @@ test('the generation worker includes matchups solved by a single player addition
  const data={players:{1:['Start','C'],2:['Bridge','D'],3:['End','C']},groups:[['A',20102011,[1,2]],['B',20112012,[2,3]]]};
  const messages=[],self={postMessage:message=>messages.push(message)},randomMath=Object.create(Math);randomMath.random=()=>.4;
  const source=readFileSync(new URL('../public/solver-worker.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
- new Function('createEngine','createSnake','randomSnake','allDecades','playersFromEras','minimumShots','self','Math',source)(createEngine,createSnake,randomSnake,allDecades,playersFromEras,minimumShots,self,randomMath);
+ new Function('orderMatchup','createEngine','createSnake','randomSnake','allDecades','playersFromEras','minimumShots','self','Math',source)(orderMatchup,createEngine,createSnake,randomSnake,allDecades,playersFromEras,minimumShots,self,randomMath);
  self.onmessage({data:{type:'init',data}});self.onmessage({data:{id:1,type:'random',style:'shortest',decades:[2010],pool:[1,3],position:'defense'}});
  const pair=messages[0].result;assert.ok(pair);assert.equal(pair.par,1);assert.ok([1,3].includes(pair.start)&&[1,3].includes(pair.end));
 });

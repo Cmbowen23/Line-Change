@@ -1,3 +1,4 @@
+import {careerStarts} from './career-starts.js';
 import {matchesPosition} from './modes.js';
 export const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,'');
 // Accent-insensitive search uses MLB's recorded full names.
@@ -121,6 +122,8 @@ export function createEngine(data,decades=null,{position='any',start=null,end=nu
  }
  return {evidence,shortest,search,hintTeams,allShortest,randomMatchup,forward,randomLongestMatchup,connectionProfile};
 }
+// Keep ties in the supplied order; career starts come from full player records.
+export function orderMatchup(data,start,end){return (careerStarts[start]??data.players[start]?.[2])>(careerStarts[end]??data.players[end]?.[2])?[end,start]:[start,end]}
 export function easternDate(now=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(now)}
 export function puzzleFor(data,date){if(data.dailySchedule?.overrides?.[date])return data.dailySchedule.overrides[date];const puzzles=data.dailySchedule?.puzzles||data.puzzles;const day=Math.floor(Date.parse(date+'T00:00:00Z')/86400000);return puzzles[((day%puzzles.length)+puzzles.length)%puzzles.length]}
 export function streakFor(wins,date){let day=Date.parse(date+'T00:00:00Z'),n=0;if(!wins[date])day-=86400000;while(wins[new Date(day).toISOString().slice(0,10)]){n++;day-=86400000}return n}

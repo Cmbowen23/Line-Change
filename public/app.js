@@ -1,4 +1,4 @@
-import {createEngine,easternDate,puzzleFor,streakFor,matchesPlayerName} from './core.js';
+import {createEngine,easternDate,puzzleFor,streakFor,matchesPlayerName,orderMatchup} from './core.js';
 import {allDecades,challengeURL,parseChallenge} from './challenges.js';
 import {portrait,teamLogo,connectionSentence,playerHistory,seasonRanges,difficultyPool,routePosition} from './presentation.js';
 import {rosterFor,canAddPlayer,appendConnection} from './explore.js';
@@ -154,7 +154,8 @@ function appendAllAnswers(parent,lookup=null){
  },0);
 }
 async function share(){const text=`🏒 LINE CHANGE${mode==='daily'?` · ${date}`:' · FREE PLAY'}\n${name(start)} → ${name(end)}\n${'🟩'.repeat(Math.min(longest()?route.length-1:shortestShots(route,end),12))}\n${longest()?snakeScore(gameStyle,routeLinks).value+' '+snakeScore(gameStyle,routeLinks).unit:shotLabel(shortestShots(route,end))+' · Shortest route '+shotLabel(optimal)+(mode==='daily'?' · '+dailyStars(shortestShots(route,end),optimal,revealed)+' stars':'')}${longest()?' · '+styleNames[gameStyle]:gamePosition!=='any'?' · '+positionNames[gamePosition]:''} · ${hintsUsed} hints${mode==='daily'?`\n🔥 ${$('streak').textContent} day streak`:''}\n${mode==='free'?gameURL():location.origin}`;try{if(navigator.share)await navigator.share({text});else{await navigator.clipboard.writeText(text);status('Result copied. Share it with your locker room.')}}catch(e){if(e.name!=='AbortError'){status('Copy your result below.');const box=document.createElement('textarea');box.value=text;box.rows=6;box.style.width='100%';$('result').append(box);box.focus();box.select()}}}
-function daily(){if(!data)return;lookupRequest++;revision++;snake=null;gamePosition='any';lost=solving=false;closeExplorer();closeCompletion();clearChallengeURL();mode='daily';engine=createEngine(data);date=easternDate();$('daily').classList.add('active');$('free').classList.remove('active');$('setup').hidden=true;$('board').hidden=false;$('date').textContent=`DAILY · ${date}`;[start,end,optimal]=puzzleFor(data,date);optimal=minimumShots(optimal);const stored=read(key(),null);route=[start];routeLinks=[];finished=false;revealed=false;hintsUsed=0;hintedPlayers=new Set();
+function daily(){if(!data)return;lookupRequest++;revision++;snake=null;gamePosition='any';lost=solving=false;closeExplorer();closeCompletion();clearChallengeURL();mode='daily';engine=createEngine(data);date=easternDate();$('daily').classList.add('active');$('free').classList.remove('active');$('setup').hidden=true;$('board').hidden=false;$('date').textContent=`DAILY · ${date}`;[start,end,optimal]=puzzleFor(data,date);[start,end]=orderMatchup(data,start,end);optimal=minimumShots(optimal);const stored=read(key(),null);route=[start];routeLinks=[];finished=false;revealed=false;hintsUsed=0;hintedPlayers=new Set();
+ if(stored?.finished&&Array.isArray(stored.route)&&stored.route[0]===end&&stored.route.at(-1)===start)stored.route=[...stored.route].reverse();
  if(stored&&Array.isArray(stored.route)&&stored.route[0]===start&&stored.route.every((p,i)=>data.players[p]&&(!i||engine.evidence(stored.route[i-1],p).length))){route=stored.route;hintsUsed=Number.isInteger(stored.hintsUsed)&&stored.hintsUsed>=0?stored.hintsUsed:0;hintedPlayers=new Set(stored.hintedPlayers||[]);revealed=stored.revealed===true;finished=(stored.finished===true&&route.at(-1)===end);if(revealed&&!finished){route=[start];revealed=false}}
  $('player-search').value='';$('player-results').replaceChildren();render();showStreak();status(finished?'Today’s attempt is saved. Come back tomorrow for a new matchup.':'Build your chain. Search any NHL player to add a link.');maybeShowIntro();}
 function setupFree(){if(!data)return;lookupRequest++;revision++;solving=false;closeExplorer();closeCompletion();clearChallengeURL();mode='free';selectedDecades=read('line-change-decades',allDecades);if(!Array.isArray(selectedDecades))selectedDecades=allDecades;selectedDecades=selectedDecades.filter(d=>allDecades.includes(d));engine=createEngine(data,selectedDecades);renderDecades();$('game-style').value=gameStyle;$('position-rule').value=position;renderSettings();$('difficulty').value=difficulty;$('setup-status').textContent='';$('daily').classList.remove('active');$('free').classList.add('active');$('setup').hidden=false;$('board').hidden=true;$('free-controls').hidden=true;$('date').textContent='FREE PLAY · YOUR MATCHUP';$('par').hidden=true;$('par').textContent='';selectedStart=selectedEnd=null;for(const id of ['start-search','end-search'])$(id).value='';for(const id of ['start-results','end-results'])$(id).replaceChildren();resetLookup();updateCustomButtons();$('random-free').disabled=!selectedDecades.length;}
@@ -162,7 +163,14 @@ function autocomplete(inputId,resultId,callback){const input=$(inputId),containe
 autocomplete('player-search','player-results',p=>add(p.id));
 for(const side of ['start','end'])autocomplete(side+'-search',side+'-results',p=>{if(side==='start')selectedStart=p.id;else selectedEnd=p.id;$(side+'-search').value=p.name;updateCustomButtons()});
 function clearChallengeURL(){const url=new URL(location.href);for(const k of ['start','end','decades','style','position'])url.searchParams.delete(k);history.replaceState(null,'',url);}
-function updateCustomButtons(){const disabled=!selectedStart||!selectedEnd||selectedStart===selectedEnd;$('start-free').disabled=$('share-custom').disabled=disabled;$('challenge-link-box').hidden=true;$('lookup-submit').disabled=$('lookup-open').disabled=disabled;}
+function updateCustomButtons(){if(selectedStart&&selectedEnd&&selectedStart!==selectedEnd){
+ [selectedStart,selectedEnd]=orderMatchup(data,selectedStart,selectedEnd);
+ $('start-search').value=name(selectedStart);$('end-search').value=name(selectedEnd);
+ if(gameStyle==='career'){
+  const required=[data.players[selectedStart][2],data.players[selectedEnd][3]].map(year=>Math.floor(Number(String(year).slice(0,4))/10)*10);
+  if(required.some(decade=>!selectedDecades.includes(decade))){selectedDecades=[...new Set([...selectedDecades,...required])].sort((a,b)=>a-b);write('line-change-decades',selectedDecades);engine=createEngine(data,selectedDecades);renderDecades();$('random-free').disabled=false}
+ }
+ }const disabled=!selectedStart||!selectedEnd||selectedStart===selectedEnd;$('start-free').disabled=$('share-custom').disabled=disabled;$('challenge-link-box').hidden=true;$('lookup-submit').disabled=$('lookup-open').disabled=disabled;}
 function resetLookup(){
  lookupRequest++;$('lookup-options').hidden=true;$('lookup-status').textContent='';$('lookup-result').hidden=true;
 }
@@ -181,7 +189,7 @@ $('lookup-submit').onclick=async()=>{
  try{
   const answer=await solve('lookup',{start:a,end:b,style,decades:allDecades});
   if(request!==lookupRequest)return;
-  if(!answer.path){$('lookup-status').textContent=style==='career'?'No chronological route was found from this rookie season to that final recorded season. Try reversing the players or choose another lookup.':'No route was found under these rules. Try another pair or the shortest-route lookup.';return}
+  if(!answer.path){$('lookup-status').textContent=style==='career'?'No chronological route was found from this rookie season to that final recorded season. Try another pair or choose another lookup.':'No route was found under these rules. Try another pair or the shortest-route lookup.';return}
   const {players,links}=answer.path;
   $('lookup-heading').textContent=style==='shortest'?'Shortest route':answer.proven?'Longest possible route':'Longest route found';
   const teams=new Set(links.map(x=>x[0])).size,seasons=new Set(links.map(x=>x[1])).size;
@@ -198,6 +206,7 @@ $('lookup-submit').onclick=async()=>{
  finally{if(request===lookupRequest)updateCustomButtons()}
 };
 function beginFree(a,b,restriction=null){
+ [a,b]=orderMatchup(data,a,b);
  closeExplorer();closeCompletion();revision++;solving=lost=false;
  gamePosition=snakeStyles.includes(gameStyle)?'any':restriction??(position==='random'?'any':position);
  if(gameStyle==='shortest'){const eligible=new Set(playersFromEras(data,selectedDecades));if(!eligible.has(a)||!eligible.has(b)){$('setup-status').textContent='Choose starting and destination players who appeared in your selected eras.';return false}}

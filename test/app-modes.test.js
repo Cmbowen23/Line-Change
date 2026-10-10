@@ -37,7 +37,7 @@ function app(){
  const timers=[];
  const bindings={timers,...core,...challenges,...presentation,...explore,...modes,createSnake,document,localStorage,location,history:{replaceState(){}},Worker,URL,confirm:()=>true,navigator:{},setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout(){},requestAnimationFrame:fn=>fn(),portrait:()=>new Element('span'),teamLogo:()=>new Element('span')};
  const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.url/g,"'https://example.com/app.js'").replace(/load\(\);document\.addEventListener\('visibilitychange',[\s\S]*$/,'');
- const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},setupFree,beginFree,add,daily,openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition}},element:id=>$(id)};`)(...Object.values(bindings));return api;
+ const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},seedDaily(record){write(key(),record)},setupFree,beginFree,add,daily,openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition}},element:id=>$(id)};`)(...Object.values(bindings));return api;
 }
 const graph={version:'test',teams:{A:'Team A',B:'Team B',C:'Team C',D:'Team D'},puzzles:[[1,4,3]],players:{1:['Start','C',20102011,20102011],2:['Bridge','D',20102011,20122013],3:['Next','G',20122013,20132014],4:['End','C',20132014,20132014],5:['Trap','D',20102011,20142015],6:['Other','R',20142015,20142015]},groups:[['A',20102011,[1,2,5]],['B',20122013,[2,3]],['C',20132014,[3,4]],['D',20142015,[5,6]]]};
 test('Lookup renders an answer without modifying the chain or opening completion',async()=>{
@@ -156,4 +156,20 @@ test('daily stars decrease with extra player additions, persist on reload, and r
 });
 test('season exploration stays available even when legacy saved toggles are disabled',()=>{
  const ui=app();ui.configure(graph,'shortest');ui.daily();ui.openExplorer({kind:'player',id:1});assert.equal(ui.element('explorer').open,true);assert.equal(ui.element('explore-title').textContent,'Start');assert.equal(ui.element('roster-hint').hidden,false);assert.equal(ui.element('player-hint').hidden,false);
+});
+
+test('Earlier career starts first in reversed daily, free-play, custom shares and lookup matchups',async()=>{
+ const d={...graph,puzzles:[[4,1,graph.puzzles[0][2]]]};
+ const ui=app();ui.configure(d,'shortest');ui.daily();assert.deepEqual(ui.state().route,[1]);
+ for(const style of ['shortest','open','road','career']){ui.configure(d,style);assert.equal(ui.beginFree(4,1),true,style);assert.deepEqual(ui.state().route,[1],style)}
+ ui.configure(d,'shortest');ui.setupFree();
+ for(const [side,q] of [['start','End'],['end','Start']]){ui.element(side+'-search').value=q;ui.element(side+'-search').listeners.input();ui.flushTimers();ui.element(side+'-results').children.find(x=>x.tagName==='button').onclick()}
+ assert.equal(ui.element('start-search').value,'Start');assert.equal(ui.element('end-search').value,'End');
+ ui.element('share-custom').onclick();const url=new URL(ui.element('challenge-link').value);assert.equal(url.searchParams.get('start'),'1');assert.equal(url.searchParams.get('end'),'4');
+ await ui.element('lookup-submit').onclick();assert.match(ui.element('lookup-summary').textContent,/Start → End/);
+});
+test('Completed daily results survive reversed endpoint ordering',()=>{
+ const ui=app();ui.configure({...graph,puzzles:[[4,1,graph.puzzles[0][2]]]},'shortest');ui.daily();
+ const route=graph.players[3][0]==='Next'?[4,3,2,1]:[4,2,1];
+ ui.seedDaily({route,finished:true,revealed:false,hintsUsed:2});ui.daily();assert.equal(ui.state().finished,true);assert.deepEqual(ui.state().route,[...route].reverse());assert.match(ui.element('result').textContent,/2 hints used/);
 });

@@ -1,3 +1,4 @@
+import {orderMatchup} from './core.js';
 
 // Every search result carries the team-season for each link. Career searches
 // are chronological; Open Field tracks full history; Road Trip tracks used teams.
@@ -148,7 +149,7 @@ export function randomSnake(data,decades,style,pool=null,random=Math.random){
  let best=null;
  for(let attempt=0;attempt<100;attempt++){
   let a=broad[Math.floor(random()*broad.length)],b=broad[Math.floor(random()*broad.length)];if(a===b)continue;
-  if(style==='career'&&stats.get(a).first>stats.get(b).first)[a,b]=[b,a];
+  [a,b]=orderMatchup(data,a,b);
   const c=game.context(a,b),answer=game.finish(c,{maxStates:12000}).path;
   if(!answer||answer.links.length<2)continue;
   const span=Number(String(c.bounds.last).slice(0,4))-Number(String(c.bounds.first).slice(0,4)),score=(style==='career'?span*20:0)+stats.get(a).count+stats.get(b).count;

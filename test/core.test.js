@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {createEngine,puzzleFor,easternDate,streakFor,matchesPlayerName} from '../public/core.js';
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import {orderMatchup,createEngine,puzzleFor,easternDate,streakFor,matchesPlayerName} from '../public/core.js';
 const d=JSON.parse(readFileSync(new URL('../public/data/hockey.json',import.meta.url))),e=createEngine(d);const id=name=>Number(Object.entries(d.players).find(([p,v])=>v[0]===name)[0]);
 test('historical, traded and false connections',()=>{assert.ok(e.evidence(id('Wayne Gretzky'),id('Mark Messier')).length);assert.ok(e.evidence(id('Claude Giroux'),id('Derick Brassard')).length);assert.equal(e.evidence(id('Sidney Crosby'),id('Auston Matthews')).length,0)});
 test('shortest cross-era route has verified links',()=>{const p=e.shortest(id('Gordie Howe'),id('Connor Bedard'));assert.equal(p.length-1,4);p.slice(1).forEach((x,i)=>assert.ok(e.evidence(p[i],x).length));assert.deepEqual(e.shortest(p[0],p[0]),[p[0]])});
@@ -19,4 +19,9 @@ test('Palffy search accepts his full given name, nickname, and accented spelling
   assert.deepEqual(e.search(query).map(p=>p.id),[8458540],query);assert.equal(matchesPlayerName(8458540,'Ziggy Palffy',query),true);
  }
  assert.deepEqual(createEngine(d,[2020]).search('Žigmund Palffy'),[]);assert.equal(matchesPlayerName(8458540,'Ziggy Palffy','Sidney Crosby'),false);
+});
+
+test('Matchup ordering uses full career starts and preserves same-season ties',()=>{
+ const data={players:{1:['Later','C',20102011,20252026],2:['Earlier','G',19992000,20202021],3:['Same debut','D',20102011,20122013]}};
+ assert.deepEqual(orderMatchup(data,1,2),[2,1]);assert.deepEqual(orderMatchup(data,2,1),[2,1]);assert.deepEqual(orderMatchup(data,1,3),[1,3]);assert.deepEqual(orderMatchup(data,3,1),[3,1]);
 });

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {createEngine,matchesPlayerName,puzzleFor} from '../../public/baseball/core.js';
+import {createEngine,orderMatchup,matchesPlayerName,puzzleFor} from '../../public/baseball/core.js';
 import {matchesPosition,playersFromEras,minimumMoves} from '../../public/baseball/modes.js';
 import {playerHistory,seasonRanges,difficultyPool} from '../../public/baseball/presentation.js';
 import {lookupConnection} from '../../public/baseball/lookup.js';
@@ -51,4 +51,9 @@ test('Lookup alternatives have exact counts and legal evidence, and sharing pres
  for(const route of routes){assert.equal(route.length-1,alternatives.distance);for(let i=1;i<route.length;i++)assert.ok(engine.evidence(route[i-1],route[i]).length)}
  const parsed=parseChallenge(challengeURL('https://example.com/',a,b,allDecades,'shortest','hitter'),data);assert.equal(parsed.position,'hitter');
  const game=createSnake(data,allDecades,'career'),answer=game.longest(game.context(id('Johnny Bench'),id('Aaron Judge')),{budgetMs:50});assert.ok(answer.path);assert.ok(game.validPath(game.context(id('Johnny Bench'),id('Aaron Judge')),answer.path));
+});
+
+test('MLB matchup ordering uses actual debuts before 1970 without expanding roster coverage',()=>{
+ const ryan=121597,bench=id('Johnny Bench');assert.equal(data.players[ryan][2],19701970);assert.equal(data.players[bench][2],19701970);
+ assert.deepEqual(orderMatchup(data,bench,ryan),[ryan,bench]);assert.deepEqual(data.coverage,[1970,2025]);
 });

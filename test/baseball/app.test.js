@@ -37,7 +37,7 @@ function app(){
  const timers=[];
  const bindings={timers,...core,...challenges,...presentation,...explore,...modes,createSnake,document,localStorage,location,history:{replaceState(){}},Worker,URL,confirm:()=>{throw Error('Native confirmation must not be used in embedded previews')},navigator:{clipboard:{async writeText(text){this.lastText=text}}},setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout(){},requestAnimationFrame:fn=>fn(),portrait:()=>new Element('span'),teamLogo:()=>new Element('span')};
  const source=readFileSync(new URL('../../public/baseball/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.url/g,"'https://example.com/app.js'").replace(/load\(\);document\.addEventListener\('visibilitychange',[\s\S]*$/,'');
- const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},setupFree,beginFree,add,daily,share,sharedText(){return navigator.clipboard.lastText},openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition,revealed}},element:id=>$(id)};`)(...Object.values(bindings));return api;
+ const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},seedDaily(record){write(key(),record)},setupFree,beginFree,add,daily,share,sharedText(){return navigator.clipboard.lastText},openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition,revealed}},element:id=>$(id)};`)(...Object.values(bindings));return api;
 }
 const graph={version:'test-mlb',teams:{A:'Club A',B:'Club B',C:'Club C'},puzzles:[[1,4,2]],players:{1:['Start','SS',20102010,20102010],2:['Pitcher','P',20102010,20122012],3:['Outfielder','CF',20102010,20122012],4:['End','C',20122012,20122012]},groups:[['A',20102010,[1,2,3]],['B',20122012,[2,4]],['C',20122012,[3,4]]]};
 test('Baseball game enforces positions, auto-completes in one move, and restores daily Open Roster',()=>{
@@ -72,4 +72,20 @@ test('Longest reveal still uses the Snake solver after accepting in-game confirm
 test('Baseball daily and custom result sharing stay on the baseball tab',async()=>{
  const ui=app();ui.configure(graph,'shortest');ui.daily();await ui.share();assert.ok(ui.sharedText().endsWith('https://example.com/baseball/'));
  ui.beginFree(1,4);ui.add(2);await ui.share();const url=new URL(ui.sharedText().split('\n').at(-1));assert.equal(url.pathname,'/baseball/');assert.equal(url.searchParams.get('start'),'1');assert.equal(url.searchParams.get('end'),'4');
+});
+
+test('Earlier career starts first in reversed daily, free-play, custom shares and lookup matchups',async()=>{
+ const d={...graph,puzzles:[[4,1,graph.puzzles[0][2]]]};
+ const ui=app();ui.configure(d,'shortest');ui.daily();assert.deepEqual(ui.state().route,[1]);
+ for(const style of ['shortest','open','road','career']){ui.configure(d,style);assert.equal(ui.beginFree(4,1),true,style);assert.deepEqual(ui.state().route,[1],style)}
+ ui.configure(d,'shortest');ui.setupFree();
+ for(const [side,q] of [['start','End'],['end','Start']]){ui.element(side+'-search').value=q;ui.element(side+'-search').listeners.input();ui.flushTimers();ui.element(side+'-results').children.find(x=>x.tagName==='button').onclick()}
+ assert.equal(ui.element('start-search').value,'Start');assert.equal(ui.element('end-search').value,'End');
+ ui.element('share-custom').onclick();const url=new URL(ui.element('challenge-link').value);assert.equal(url.searchParams.get('start'),'1');assert.equal(url.searchParams.get('end'),'4');
+ await ui.element('lookup-submit').onclick();assert.match(ui.element('lookup-summary').textContent,/Start → End/);
+});
+test('Completed daily results survive reversed endpoint ordering',()=>{
+ const ui=app();ui.configure({...graph,puzzles:[[4,1,graph.puzzles[0][2]]]},'shortest');ui.daily();
+ const route=graph.players[3][0]==='Next'?[4,3,2,1]:[4,2,1];
+ ui.seedDaily({route,finished:true,revealed:false,hintsUsed:2});ui.daily();assert.equal(ui.state().finished,true);assert.deepEqual(ui.state().route,[...route].reverse());assert.match(ui.element('result').textContent,/2 hints used/);
 });

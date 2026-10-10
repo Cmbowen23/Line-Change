@@ -1,5 +1,5 @@
 import {createSnake,randomSnake} from './snake.js';
-import {createEngine} from './core.js';
+import {createEngine,orderMatchup} from './core.js';
 import {allDecades} from './challenges.js';
 import {playersFromEras,minimumMoves} from './modes.js';
 import {lookupConnection} from './lookup.js';
@@ -11,6 +11,7 @@ self.onmessage=event=>{
   if(type==='lookup'){self.postMessage({id,result:lookupConnection(data,request)});return}
   if(type==='random'){
    const result=request.style==='shortest'?createEngine(data,allDecades).randomMatchup(Math.random,playersFromEras(data,request.decades,request.pool),2,5,request.position):randomSnake(data,request.decades,request.style,request.pool);
+   if(result)[result.start,result.end]=orderMatchup(data,result.start,result.end);
    if(result&&request.style==='shortest')result.par=minimumMoves(result.par);
    self.postMessage({id,result});return;
   }
