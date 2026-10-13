@@ -47,7 +47,7 @@ test('Baseball rosters keep eligible players first without allowing invalid prev
  ui.openExplorer({kind:'roster',team:'A',year:20102010});
  const rows=ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.filter(x=>x.tagName==='button');assert.deepEqual(rows.map(x=>x.dataset.playerId),[4,2,1,3]);
  assert.ok(!rows[0].className.includes('position-excluded'));const excluded=rows.find(x=>x.dataset.playerId===3);assert.match(excluded.className,/position-excluded/);excluded.onclick();assert.equal(ui.element('explore-title').textContent,'Outfielder');
- const profile=ui.element('explore-content').children.find(x=>x.className==='explore-profile');assert.equal(profile.children.find(x=>x.tagName==='button').disabled,true);
+ assert.equal(ui.element('explore-add').disabled,true);
  ui.daily();ui.openExplorer({kind:'roster',team:'A',year:20102010});
 });
 test('Baseball game enforces positions, auto-completes in one move, and restores daily Open Roster',()=>{
@@ -162,20 +162,20 @@ test('Reverse Shortest Chain enforces intermediate positions, exempts both endpo
 });
 
 
-test('Explorer additions commit immediately, keep the popup open, show link logos, and finish from either endpoint',()=>{
+test('Explorer previews multiple links for free, undoes previews, commits together and finishes from either endpoint',()=>{
  const d={...graph,puzzles:[[1,5,4]],players:{1:['Start','C',20102010,20102010],2:['Left','P',20102010,20112011],3:['Middle','P',20112011,20122012],4:['Right','P',20122012,20132013],5:['Finish','C',20132013,20132013]},groups:[['A',20102010,[1,2]],['B',20112011,[2,3]],['C',20122012,[3,4]],['D',20132013,[4,5]]]};
  const ui=app();ui.configure(d,'shortest');ui.beginFree(1,5);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102010,query:''});
  const row=id=>ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===id);
- const add=()=>ui.element('explore-content').children.find(x=>x.className==='explore-profile').children.find(x=>x.tagName==='button').onclick();
+ const add=()=>ui.element('explore-add').onclick();
  row(2).onclick();assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().score,0);assert.equal(ui.element('explore-target').textContent,'Shortest possible route: 3 moves');add();assert.deepEqual(ui.state().route,[1,2]);assert.equal(ui.state().score,1);assert.equal(ui.element('explorer').open,true);
  const link=ui.element('explore-chain').children.find(x=>x.className==='explore-chain-link');assert.ok(link.children.some(x=>x.className==='explore-chain-team'));
  ui.element('explore-chain').children.find(x=>x.dataset.playerId===5).children[0].onclick();assert.equal(ui.state().buildSide,'end');
- ui.openExplorer({kind:'roster',playerId:5,team:'D',year:20132013,query:''});row(4).onclick();add();assert.deepEqual(ui.state().rightRoute,[5,4]);assert.equal(ui.state().score,2);
- ui.openExplorer({kind:'roster',playerId:4,team:'C',year:20122012,query:''});row(3).onclick();add();assert.equal(ui.state().finished,true);assert.deepEqual(ui.state().route,[1,2,3,4,5]);assert.equal(ui.state().score,3);assert.equal(ui.element('completion').open,true);assert.equal(ui.element('explorer').open,false);
+ ui.openExplorer({kind:'roster',playerId:5,team:'D',year:20132013,query:''});row(4).onclick();assert.deepEqual(ui.state().rightRoute,[5]);assert.equal(ui.state().score,1);assert.equal(ui.element('explore-add').disabled,false);
+ ui.openExplorer({kind:'roster',playerId:4,team:'C',year:20122012,query:''});row(3).onclick();assert.equal(ui.state().finished,false);assert.equal(ui.state().score,1);ui.element('explore-undo').onclick();assert.equal(ui.state().score,1);assert.equal(ui.element('explore-chain').children.some(x=>x.dataset.playerId===3),false);ui.openExplorer({kind:'roster',playerId:4,team:'C',year:20122012,query:''});row(3).onclick();add();assert.equal(ui.state().finished,true);assert.deepEqual(ui.state().route,[1,2,3,4,5]);assert.equal(ui.state().score,3);assert.equal(ui.element('completion').open,true);assert.equal(ui.element('explorer').open,false);
 });
 test('Browsing invalid players is free and the explorer has centered season navigation with no submission UI',()=>{
  const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102010,query:''});assert.match(ui.element('explore-title').textContent,/Team A|Club A/);assert.equal(ui.element('explore-prev-season').hidden,false);
- ui.openExplorer({kind:'player',id:4});const profile=ui.element('explore-content').children.find(x=>x.className==='explore-profile');assert.equal(profile.children.find(x=>x.tagName==='button').disabled,true);assert.equal(ui.state().score,0);
+ ui.openExplorer({kind:'player',id:4});assert.equal(ui.element('explore-add').disabled,true);assert.equal(ui.state().score,0);
  const html=readFileSync(new URL('../../public/baseball/index.html',import.meta.url),'utf8');assert.doesNotMatch(html,/id="explore-submit"|Submit chain|id="build-sides"/);assert.match(html,/Previous season/);assert.match(html,/Next season/);
  assert.ok(ui.element('chain').children.some(x=>x.className?.includes('route-pending')&&x.children.some(line=>line.className?.includes('route-gap-mark'))));
 });

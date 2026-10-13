@@ -12,6 +12,7 @@ let longTarget=null;
 let lookupRequest=0;
 let rightRoute=[],buildSide='start',shortHistory=[];
 let exploreStack=[];
+let explorerPreview=[],previewRendering=false;
 const explorePositions=new Map();
 const canExplore=()=>true;
 const activeDecades=()=>mode==='daily'||gameStyle==='shortest'?allDecades:selectedDecades;
@@ -93,7 +94,7 @@ async function findLongTarget(){
   if(!longTarget){$('route-target').textContent='Longest target unavailable';$('route-target-note').textContent='Keep building a valid chain. Restart to retry the target search.'}
  }catch(error){if(generation===revision&&longest()){$('route-target').textContent='Longest target unavailable';$('route-target-note').textContent='Keep playing; the route search could not finish.'}}
 }
-function add(p,connection=null){
+function add(p,connection=null,batch=false){
  const verdict=eligibility(p,connection);
  if(!verdict.allowed){if(!finished)status(verdict.reason+'.',true);return}
  const previous=currentPlayer();
@@ -106,7 +107,7 @@ function add(p,connection=null){
  if(route.at(-1)===end){finished=true;if(mode==='daily'){const wins=read('line-change-wins',{});wins[date]=true;write('line-change-wins',wins);showStreak()}}
  if(!finished&&longest()&&gameStyle==='career'&&!snake.finish(snakeContext()).path){finished=true;lost=true}
  save();render();status(lost?'No chronological finish remains. Your run is over—restart to try another route.':finished?'Every link verified. Nice line change.':`Valid connection. ${proof(previous,p)}`);
- if(finished){closeExplorer();showCompletion()}else if(longest()&&gameStyle==='open')void checkOpenRun();
+ if(finished){closeExplorer();showCompletion()}else if(!batch&&longest()&&gameStyle==='open')void checkOpenRun();
 }
 async function checkOpenRun(){
  const generation=revision;let failed=false;solving=true;render();status('Checking whether a legal finish remains…');
@@ -333,6 +334,28 @@ function gapArrow(double=true){
  }
  return svg;
 }
+// Preview uses isolated copies of gameplay state; only confirmation writes progress.
+function withExplorerPreview(fn){
+ if(previewRendering)return fn();
+ const saved={route,rightRoute,routeLinks,shortHistory,buildSide,finished};
+ route=[...route];rightRoute=[...rightRoute];routeLinks=routeLinks.map(x=>[...x]);shortHistory=[...shortHistory];previewRendering=true;
+ try{for(const step of explorerPreview){buildSide=step.side;const verdict=eligibility(step.id,step.connection);if(!verdict.allowed)break;
+  if(longest()){routeLinks.push(verdict.evidence.slice(0,2));route.push(step.id)}else{const opposite=oppositePlayer();if(step.id!==opposite)activeChain().push(step.id);if(step.id===opposite||engine.evidence(step.id,opposite).length){route=[...route,...[...rightRoute].reverse()];rightRoute=[];}}
+  if(route.at(-1)===end)finished=true;
+ }buildSide=saved.buildSide;return fn();}finally{({route,rightRoute,routeLinks,shortHistory,buildSide,finished}=saved);previewRendering=false;}
+}
+function previewExplorerPlayer(id,connection){
+ withExplorerPreview(()=>{if(eligibility(id,connection).allowed)explorerPreview.push({id,connection,side:buildSide});});
+ visitExplorer({kind:'player',id,connection});
+}
+function confirmExplorerPreview(){
+ const steps=explorerPreview.splice(0);for(const step of steps){if(finished||solving)break;buildSide=step.side;add(step.id,step.connection,true);}
+ if(!finished){exploreStack=[{kind:'player',id:currentPlayer()}];renderExplorer();restoreExplorerPosition();if(longest()&&gameStyle==='open')void checkOpenRun();}
+}
+function undoExplorerLink(){
+ if(explorerPreview.length){explorerPreview.pop();const id=withExplorerPreview(()=>currentPlayer());exploreStack=[{kind:'player',id}];renderExplorer();restoreExplorerPosition();}
+ else{$('undo').onclick();renderExplorer();}
+}
 function renderExplorerChain(view){
  const strip=$('explore-chain');strip.replaceChildren();
  const pending=!finished&&route.at(-1)!==end,players=pending?[...route,...[...rightRoute].reverse()]:route,active=currentPlayer();
@@ -340,7 +363,7 @@ function renderExplorerChain(view){
   const id=players[i],item=document.createElement('div'),button=document.createElement('button'),caption=document.createElement('span');
   item.className='explore-chain-player';item.dataset.playerId=id;
   button.type='button';button.className='explore-chain-head'+(id===active?' selected-origin':'');button.setAttribute('aria-label','Explore '+name(id));button.setAttribute('aria-pressed',String(id===active));button.append(portrait(id,name(id)));caption.textContent=name(id)+(longest()&&gameStyle==='career'&&(id===start||id===end)?' '+season(id===start?snakeContext().bounds.first:snakeContext().bounds.last):'');button.append(caption);
-  button.onclick=()=>{if(!longest()&&!finished){if(id===start||id===route.at(-1))buildSide='start';else if(id===end||id===rightRoute.at(-1))buildSide='end';save();render();}visitExplorer({kind:'player',id});};item.append(button);strip.append(item);
+  button.onclick=()=>{const side=withExplorerPreview(()=>id===start||id===route.at(-1)?'start':id===end||id===rightRoute.at(-1)?'end':buildSide);buildSide=side;visitExplorer({kind:'player',id});};item.append(button);strip.append(item);
   if(i<players.length-1){
    const link=document.createElement('div'),gap=pending&&i===route.length-1;link.className='explore-chain-link';
    if(gap){link.className+=' unconnected';link.append(gapArrow(!longest()))}else{
@@ -352,7 +375,7 @@ function renderExplorerChain(view){
  }
  $('explore-target').hidden=longest();$('explore-target').textContent=longest()?'':`Shortest possible route: ${shotLabel(optimal)}`;
 }
-function closeExplorer(){rememberExplorerPosition();exploreStack=[];if($('explorer').open)$('explorer').close();}
+function closeExplorer(){rememberExplorerPosition();explorerPreview=[];exploreStack=[];if($('explorer').open)$('explorer').close();}
 function explorerViewKey(view){return view.kind==='roster'?JSON.stringify(['roster',view.team,view.year,view.query||'']):JSON.stringify(['player',view.id]);}
 function rememberExplorerPosition(){const view=exploreStack.at(-1);if(view&&$('explorer').open)explorePositions.set(explorerViewKey(view),$('explorer').scrollTop||0);}
 function restoreExplorerPosition(){
@@ -362,8 +385,9 @@ function restoreExplorerPosition(){
  requestAnimationFrame(()=>{if($('explorer').open&&exploreStack.at(-1)===view)$('explorer').scrollTop=top;});
 }
 function openExplorer(view){if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;rememberExplorerPosition();if(!longest()&&!finished){const id=view.kind==='player'?view.id:view.playerId;if(id===start||id===route.at(-1))selectBuildSide('start');else if(id===end||id===rightRoute.at(-1))selectBuildSide('end');}if(view.kind==='roster')view={...view,playerId:view.playerId??currentPlayer()};exploreStack=[view];renderExplorer();if(!$('explorer').open){$('explorer').showModal();$('close-explorer').focus({preventScroll:true});}restoreExplorerPosition();}
-function visitExplorer(view){if(view.kind==='roster'&&!seasonExploreAllowed(view.year))return;rememberExplorerPosition();if(view.kind==='roster')view={...view,playerId:view.playerId??currentPlayer()};exploreStack.push(view);renderExplorer();restoreExplorerPosition();}
-function rosterNavigation(view){
+function visitExplorer(view){if(view.kind==='roster'&&!withExplorerPreview(()=>seasonExploreAllowed(view.year)))return;rememberExplorerPosition();if(view.kind==='roster')view={...view,playerId:view.playerId??currentPlayer()};exploreStack.push(view);renderExplorer();restoreExplorerPosition();}
+function rosterNavigation(view){return withExplorerPreview(()=>rosterNavigationContent(view));}
+function rosterNavigationContent(view){
  const playerId=view.playerId??currentPlayer();
  const rosters=historyFor(playerId).flatMap(record=>record.allowed.map(year=>({kind:'roster',playerId,team:record.team,year,query:''}))).sort((a,b)=>a.year-b.year||a.team.localeCompare(b.team));
  const index=rosters.findIndex(item=>item.team===view.team&&item.year===view.year);
@@ -374,11 +398,13 @@ function changeExplorerSeason(direction){
  const {rosters,index}=rosterNavigation(view);const next=rosters[index+direction];if(index<0||!next)return;
  rememberExplorerPosition();exploreStack[exploreStack.length-1]=next;renderExplorer();restoreExplorerPosition();
 }
-function renderExplorer(){
+function renderExplorer(){return withExplorerPreview(renderExplorerContent);}
+function renderExplorerContent(){
  const view=exploreStack.at(-1);if(!view)return;
  const bounds=longest()&&gameStyle==='career'?snakeContext().bounds:null;
 
  renderExplorerChain(view);
+ $('explore-add').disabled=!explorerPreview.length;$('explore-undo').disabled=!explorerPreview.length&&(finished||solving||(longest()?route.length<2||['open','career'].includes(gameStyle):!shortHistory.length));
  $('explore-step').hidden=!longest();
  $('explore-step').textContent=bounds?(routeLinks.length?`Next shot: a later season than ${season(routeLinks.at(-1)[1])}, ending by ${season(bounds.last)}.`:`First shot: ${name(start)}’s rookie season, ${season(bounds.first)}.`):longest()?`${styleNames[gameStyle]} · ${routeLinks.length} shots taken.`:`Shortest route: ${shotLabel(optimal)}.`;
 
@@ -397,7 +423,7 @@ function renderExplorer(){
  }else{
   $('explore-title').textContent=name(view.id);const profile=document.createElement('div');profile.className='explore-profile';if(longest())profile.append(portrait(view.id,name(view.id)));
   const verdict=eligibility(view.id,view.connection),button=document.createElement('button');button.textContent=verdict.allowed?(view.id===oppositePlayer()?'Join chains':'Add to chain'):verdict.reason;button.disabled=!verdict.allowed;
-  button.onclick=()=>{rememberExplorerPosition();add(view.id,view.connection);if(!finished){exploreStack=[{kind:'player',id:view.id}];renderExplorer();restoreExplorerPosition();}};profile.append(button);content.append(profile);
+  button.onclick=()=>{previewExplorerPlayer(view.id,view.connection);};if(!usedPlayers().includes(view.id)&&!finished)profile.append(button);content.append(profile);
 
   for(const record of historyFor(view.id)){
    const row=document.createElement('div');row.className='explore-career-team'+(record.allowed.length?'':' inactive-history');const title=document.createElement(record.allowed.length?'strong':'span');title.textContent=data.teams[record.team]||record.team;row.append(teamLogo(record.team,title.textContent),title);content.append(row);
@@ -405,20 +431,23 @@ function renderExplorer(){
   }
  }
 }
-function renderRoster(){
+function renderRoster(){return withExplorerPreview(renderRosterContent);}
+function renderRosterContent(){
  const view=exploreStack.at(-1);if(view?.kind!=='roster')return;let list=$('explore-roster');if(!list){list=document.createElement('div');list.id='explore-roster';$('explore-content').append(list)}list.replaceChildren();
  const blocked=id=>!!activePositionRule()&&id!==start&&id!==end&&!matchesPosition(data.players[id],gamePosition);
  const rank=id=>blocked(id)?2:usedPlayers().includes(id)&&id!==end?1:0;
  const ids=rosterFor(data,view.team,view.year,activeDecades()).filter(id=>matchesPlayerName(id,name(id),view.query||'')).sort((a,b)=>rank(a)-rank(b));
  const count=document.createElement('p');count.className='explore-note';count.setAttribute('role','status');count.textContent=ids.length?`${ids.length} ${ids.length===1?'player':'players'}`:'No players match this search.';list.append(count);
- for(const id of ids){const button=document.createElement('button');button.className='roster-player'+(blocked(id)?' position-excluded':usedPlayers().includes(id)&&id!==end?' roster-used':'');button.dataset.playerId=id;button.type='button';const body=document.createElement('span'),title=document.createElement('strong'),label=document.createElement('small');title.textContent=name(id);label.textContent=data.players[id][1]+(id===end?' · Destination':usedPlayers().includes(id)?' · Already used':blocked(id)?'':'');body.append(title,label);button.append(portrait(id,name(id)),body);button.onclick=()=>{visitExplorer({kind:'player',id,connection:[view.team,view.year]});};list.append(button)}
+ for(const id of ids){const button=document.createElement('button');button.className='roster-player'+(blocked(id)?' position-excluded':usedPlayers().includes(id)&&id!==end?' roster-used':'');button.dataset.playerId=id;button.type='button';const body=document.createElement('span'),title=document.createElement('strong'),label=document.createElement('small');title.textContent=name(id);label.textContent=data.players[id][1]+(id===end?' · Destination':usedPlayers().includes(id)?' · Already used':blocked(id)?'':'');body.append(title,label);button.append(portrait(id,name(id)),body);button.onclick=()=>previewExplorerPlayer(id,[view.team,view.year]);list.append(button)}
 }
+$('explore-add').onclick=confirmExplorerPreview;
+$('explore-undo').onclick=undoExplorerLink;
 $('close-explorer').onclick=closeExplorer;
 $('explore-prev-season').onclick=()=>changeExplorerSeason(-1);
 $('explore-next-season').onclick=()=>changeExplorerSeason(1);
 $('explore-back').onclick=()=>{if(exploreStack.length>1){rememberExplorerPosition();exploreStack.pop();renderExplorer();restoreExplorerPosition()}};
 $('explorer').addEventListener('scroll',rememberExplorerPosition);
-$('explorer').addEventListener('close',()=>{if(!$('explorer').open){exploreStack=[]}});
+$('explorer').addEventListener('close',()=>{if(!$('explorer').open){explorerPreview=[];exploreStack=[]}});
 $('roster-search').oninput=()=>{const view=exploreStack.at(-1);if(view?.kind==='roster'){rememberExplorerPosition();view.query=$('roster-search').value;renderRoster();restoreExplorerPosition()}};
 function finishPath(){return longest()?snake.finish(snakeContext()).path:{players:engine.shortest(currentPlayer(),oppositePlayer(),[...route.slice(0,-1),...rightRoute.slice(0,-1)])}}
 function nextHint(){return finishPath()?.players}
