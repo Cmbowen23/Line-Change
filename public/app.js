@@ -19,6 +19,7 @@ let gameStyle=read('line-change-style','shortest');if(gameStyle==='longest')game
 let position=read('line-change-position','any');if(!['random',...positions].includes(position))position='any';
 // Older versions assigned Random implicitly. Keep it only after an explicit choice.
 if(position==='random'&&!read('line-change-position-explicit',false))position='any';
+let randomRuleBag=[];
 let gamePosition='any',snake=null,lost=false,solving=false,revision=0,worker=null,workerId=0;const workerRequests=new Map();
 const longest=()=>mode==='free'&&snakeStyles.includes(gameStyle);
 const positionRuleTitles={defense:'Defensemen only',goalie:'Goalies only',forward:'Forwards only'};
@@ -41,7 +42,7 @@ function eligibility(id,connection=null){
  return canAddPlayer(engine,activeChain(),opposite,id,{finished,connection});
 }
 function solve(type,request){if(!worker){worker=new Worker(new URL('./solver-worker.js',import.meta.url),{type:'module'});worker.postMessage({type:'init',data});worker.onmessage=e=>{const pending=workerRequests.get(e.data.id);if(!pending)return;workerRequests.delete(e.data.id);if(e.data.error)pending.reject(Error(e.data.error));else pending.resolve(e.data.result)};worker.onerror=()=>{for(const pending of workerRequests.values())pending.reject(Error('The route search could not finish. Please try again.'));workerRequests.clear();worker.terminate();worker=null}}const id=++workerId;return new Promise((resolve,reject)=>{workerRequests.set(id,{resolve,reject});worker.postMessage({id,type,...request})})}
-function renderSettings(){$('era-title').textContent=gameStyle==='shortest'?'Which player eras?':'Which connection decades?';$('era-description').textContent=gameStyle==='shortest'?'Choose the eras for your starting and destination players. Connections, player search during play, and roster exploration can use every NHL season.':'Only connections from seasons starting in your selected decades count. Choose one or combine several.';$('snake-description').hidden=!snakeStyles.includes(gameStyle);$('snake-description').textContent=snakeRules[gameStyle]||'';$('position-settings').hidden=gameStyle!=='shortest';$('random-description').textContent=gameStyle==='career'?'Random games pair an earlier rookie season with a later final recorded season, with a verified route between them.':snakeStyles.includes(gameStyle)?'Random games favor players with many connections. Each generated matchup has a verified finish.':'Each new game chooses a minimum of 1, 2, 3, or 4 shots under its position rule. Unavailable lengths are skipped.'}
+function renderSettings(){$('era-title').textContent=gameStyle==='shortest'?'Which player eras?':'Which connection decades?';$('era-description').textContent=gameStyle==='shortest'?'Choose the eras for your starting and destination players. Connections, player search during play, and roster exploration can use every NHL season.':'Only connections from seasons starting in your selected decades count. Choose one or combine several.';$('snake-description').hidden=!snakeStyles.includes(gameStyle);$('snake-description').textContent=snakeRules[gameStyle]||'';$('position-settings').hidden=gameStyle!=='shortest';$('random-description').textContent=gameStyle==='career'?'Random games pair an earlier rookie season with a later final recorded season, with a verified route between them.':snakeStyles.includes(gameStyle)?'Random games favor players with many connections. Each generated matchup has a verified finish.':'Random games favor 2–4 shots, with occasional one-shot matchups, and prefer fewer shortest answers. Unavailable lengths are skipped.'}
 let difficulty=read('line-change-difficulty','easy');
 if(!['easy','medium','hard'].includes(difficulty))difficulty='easy';
 const key=()=>`line-change-v1:${data.version}:${date}:${puzzleFor(data,date).slice(0,2).join('-')}`;
@@ -286,12 +287,13 @@ function beginFree(a,b,restriction=null){
 }
 async function randomFree(){
  const generation=revision,style=gameStyle,decades=[...selectedDecades],pool=difficultyPool(data,difficulty);
- const restrictions=style==='shortest'?(position==='random'?(()=>{const values=[...positions];for(let i=values.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[values[i],values[j]]=[values[j],values[i]]}return values})():[position]):['any'];
+ const restrictions=style==='shortest'?(position==='random'?(()=>{if(!randomRuleBag.length){randomRuleBag=[...positions];for(let i=randomRuleBag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[randomRuleBag[i],randomRuleBag[j]]=[randomRuleBag[j],randomRuleBag[i]]}}return [...randomRuleBag,...positions.filter(value=>!randomRuleBag.includes(value))]})():[position]):['any'];
  $('random-free').disabled=$('random-again').disabled=true;status('Finding a playable matchup…');$('setup-status').textContent='Finding a playable matchup…';
  try{
   let pair=null,restriction='any';for(const value of restrictions){if(generation!==revision)return;restriction=value;pair=await solve('random',{style,decades,pool,position:value});if(pair||generation!==revision)break}
   if(generation!==revision)return;
   if(!pair){const message='No playable matchup is available with these rules and difficulty in your selected decades. Add decades or increase the difficulty.';$('setup-status').textContent=message;status(message,true);return}
+  if(style==='shortest'&&position==='random')randomRuleBag=randomRuleBag.filter(value=>value!==restriction);
   beginFree(pair.start,pair.end,restriction);
  }catch(error){if(generation===revision){$('setup-status').textContent=error.message;status(error.message,true)}}finally{$('random-free').disabled=!selectedDecades.length;$('random-again').disabled=false}
 }

@@ -91,7 +91,7 @@ export function createEngine(data,decades=null,{position='any',start=null,end=nu
  const search=q=>{const needle=normalize(q).trim();if(!needle)return [];return Object.entries(data.players).filter(([id,p])=>memberships.has(Number(id))&&matchesPlayerName(id,p[0],needle)).sort((a,b)=>Number(normalize(b[1][0]).startsWith(needle))-Number(normalize(a[1][0]).startsWith(needle))||a[1][0].localeCompare(b[1][0])).slice(0,12).map(([id,p])=>({id:Number(id),name:p[0],position:p[1],first:p[2],last:p[3]}))};
  const hintTeams=(a,b)=>{const path=shortest(a,b);return path&&path.length>1?[...new Set(evidence(a,path[1]).map(g=>g[0]))]:[]};
  const randomAvailability=new Map();
- function randomMatchup(random=Math.random,pool=null,minShots=2,maxShots=4,restriction='any'){
+ function randomMatchup(random=Math.random,pool=null,minShots=2,maxShots=4,restriction='any',options={}){
   if(!Number.isInteger(minShots)||!Number.isInteger(maxShots)||minShots<1||maxShots<minShots)return null;
   const eligible=pool===null?null:new Set(pool);
   const candidates=[...memberships.keys()].filter(p=>!eligible||eligible.has(p));
@@ -99,7 +99,19 @@ export function createEngine(data,decades=null,{position='any',start=null,end=nu
   const lengths=randomAvailability.get(cacheKey)||Array.from({length:maxShots-minShots+1},(_,i)=>minShots+i);
   if(!lengths.length)return null;
   // Choose the shot count first so shorter routes do not dominate the mix.
-  const target=lengths[Math.floor(random()*lengths.length)],alternatives=new Map();
+  const chooseLength=available=>{if(!options.weights)return available[Math.floor(random()*available.length)];const total=available.reduce((sum,n)=>sum+(options.weights[n]||1),0);let choice=random()*total;for(const n of available){choice-=options.weights[n]||1;if(choice<0)return n}return available.at(-1)};
+  const target=chooseLength(lengths),alternatives=new Map();
+  let best=null,sampled=0;
+  const assess=(a,ends,shots)=>{
+   const choices=[...ends];for(let i=choices.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[choices[i],choices[j]]=[choices[j],choices[i]]}
+   for(const b of choices.slice(0,3)){
+    const pairKey=[a,b].sort((x,y)=>x-y).join(':');
+    const answers=(restriction==='any'?{allShortest}:createEngine(data,decades,{position:restriction,start:a,end:b})).allShortest(a,b);
+    const candidate={start:a,end:b,par:shots,count:answers.count,recent:options.recent?.includes(pairKey)||false};sampled++;
+    if(!best||Number(candidate.recent)<Number(best.recent)||candidate.recent===best.recent&&candidate.count<best.count)best=candidate;
+   }
+  };
+  const result=candidate=>({start:candidate.start,end:candidate.end,par:candidate.par});
   for(let i=candidates.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[candidates[i],candidates[j]]=[candidates[j],candidates[i]]}
   const visited=new Set();
   for(const a of candidates){
@@ -109,14 +121,16 @@ export function createEngine(data,decades=null,{position='any',start=null,end=nu
    const reachable=q.filter(p=>p!==a&&(!eligible||eligible.has(p)));
    if(reachable.length)for(const p of q)visited.delete(p);
    const byLength=new Map();for(const p of reachable){const shots=distance.get(p);if(shots<minShots||shots>maxShots)continue;if(!byLength.has(shots))byLength.set(shots,[]);byLength.get(shots).push(p)}
-   for(const [shots,ends] of byLength)if(!alternatives.has(shots))alternatives.set(shots,{start:a,ends});
-   if(byLength.has(target)){const ends=byLength.get(target);return {start:a,end:ends[Math.floor(random()*ends.length)],par:target}}
+   for(const [shots,ends] of byLength){if(!alternatives.has(shots))alternatives.set(shots,[]);if(alternatives.get(shots).length<4)alternatives.get(shots).push({start:a,ends})}
+   if(byLength.has(target)){const ends=byLength.get(target);if(!options.preferFewerRoutes)return {start:a,end:ends[Math.floor(random()*ends.length)],par:target};assess(a,ends,target);if(sampled>=12)return result(best)}
   }
   // Some era/difficulty combinations cannot produce every length. Remember
   // their available lengths and choose a valid game within the same range.
+  if(best)return result(best);
   const available=[...alternatives.keys()].sort((x,y)=>x-y);randomAvailability.set(cacheKey,available);
   if(!available.length)return null;
-  const shots=available[Math.floor(random()*available.length)],{start,ends}=alternatives.get(shots);
+  const shots=chooseLength(available),choices=alternatives.get(shots),{start,ends}=choices[0];
+  if(options.preferFewerRoutes){for(const choice of choices)assess(choice.start,choice.ends,shots);return result(best)}
   return {start,end:ends[Math.floor(random()*ends.length)],par:shots};
  }
  return {evidence,shortest,search,hintTeams,allShortest,randomMatchup,forward,randomLongestMatchup,connectionProfile};

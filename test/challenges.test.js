@@ -67,3 +67,13 @@ test('random games find a requested length beyond the first start and fall back 
  const star=createEngine({players:{1:['Center'],2:['Left'],3:['Right']},groups:groups.slice(0,2)});
  for(let i=0;i<3;i++)assert.equal(star.randomMatchup(()=>0.999).par,2);
 });
+
+test('Balanced generation weights longer routes and favors fewer shortest answers without changing rules',()=>{
+ const players=Object.fromEntries(Array.from({length:9},(_,i)=>[i+1,[`Player ${i+1}`,'C']]));
+ const groups=Array.from({length:8},(_,i)=>[`Team ${i}`,20202021,[i+1,i+2]]);
+ const options={weights:{2:15,3:25,4:35,5:25},preferFewerRoutes:true};
+ for(const [rng,connections] of [[.1,2],[.2,3],[.5,4],[.9,5]]){const engine=createEngine({players,groups}),pair=engine.randomMatchup(()=>rng,null,2,5,'any',options);assert.equal(pair.par,connections);assert.equal(engine.allShortest(pair.start,pair.end).count,1n)}
+ const d={players,groups:[['A',20202021,[1,2,3,4]],['B',20202021,[2,3,4,5]],['C',20202021,[1,6]],['D',20202021,[6,7]]]};
+ const engine=createEngine(d),pair=engine.randomMatchup(()=>.5,[1,5,7],2,2,'any',{preferFewerRoutes:true});assert.equal(engine.allShortest(pair.start,pair.end).count,1n);assert.equal(pair.par,2);
+ const available=createEngine({players,groups:[groups[0],groups[1]]}).randomMatchup(()=>.99,null,2,5,'any',options);assert.equal(available.par,2);
+});
