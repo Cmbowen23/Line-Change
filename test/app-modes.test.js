@@ -250,16 +250,15 @@ test('Reverse Shortest Chain enforces intermediate positions, exempts both endpo
 });
 
 
-test('Explorer previews multiple links for free, undoes previews, commits together and finishes from either endpoint',()=>{
- const d={...graph,puzzles:[[1,5,4]],players:{1:['Start','C',20102011,20102011],2:['Left','D',20102011,20112012],3:['Middle','D',20112012,20122013],4:['Right','D',20122013,20132014],5:['Finish','C',20132014,20132014]},groups:[['A',20102011,[1,2]],['B',20112012,[2,3]],['C',20122013,[3,4]],['D',20132014,[4,5]]]};
- const ui=app();ui.configure(d,'shortest');ui.beginFree(1,5);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011,query:''});
+test('Browsing requires explicit Add to chain in Shortest and Career Run, with no preview or score changes',()=>{
+ for(const style of ['shortest','career']){
+ const ui=app();ui.configure(graph,style);ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});
  const row=id=>ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===id);
- const add=()=>ui.element('explore-add').onclick();
- row(2).onclick();assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().score,0);assert.equal(ui.element('explore-target').textContent,'Shortest possible route: 3 shots');add();assert.deepEqual(ui.state().route,[1,2]);assert.equal(ui.state().score,1);assert.equal(ui.element('explorer').open,true);
- const link=ui.element('explore-chain').children.find(x=>x.className==='explore-chain-link');assert.ok(link.children.some(x=>x.className==='explore-chain-team'));
- ui.element('explore-chain').children.find(x=>x.dataset.playerId===5).children[0].onclick();assert.equal(ui.state().buildSide,'end');
- ui.openExplorer({kind:'roster',playerId:5,team:'D',year:20132014,query:''});row(4).onclick();assert.deepEqual(ui.state().rightRoute,[5]);assert.equal(ui.state().score,1);assert.equal(ui.element('explore-add').disabled,false);
- ui.openExplorer({kind:'roster',playerId:4,team:'C',year:20122013,query:''});row(3).onclick();assert.equal(ui.state().finished,false);assert.equal(ui.state().score,1);ui.element('explore-undo').onclick();assert.equal(ui.state().score,1);assert.equal(ui.element('explore-chain').children.some(x=>x.dataset.playerId===3),false);ui.openExplorer({kind:'roster',playerId:4,team:'C',year:20122013,query:''});row(3).onclick();add();assert.equal(ui.state().finished,true);assert.deepEqual(ui.state().route,[1,2,3,4,5]);assert.equal(ui.state().score,3);assert.equal(ui.element('completion').open,true);assert.equal(ui.element('explorer').open,false);
+ row(2).onclick();assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().score,0);assert.equal(ui.element('explore-chain').children.some(x=>x.dataset.playerId===2),false);assert.equal(ui.element('explore-add').disabled,false);
+ ui.element('explore-add').onclick();assert.deepEqual(ui.state().route,[1,2]);assert.equal(ui.state().score,1);assert.equal(ui.element('explorer').open,true);
+ ui.openExplorer({kind:'roster',playerId:2,team:'B',year:20122013});row(3).onclick();assert.deepEqual(ui.state().route,[1,2]);ui.element('explore-add').onclick();
+ if(style==='shortest'){assert.equal(ui.state().finished,true);assert.equal(ui.element('completion').open,true)}else{assert.deepEqual(ui.state().route,[1,2,3]);assert.equal(ui.state().finished,false)}
+ }
 });
 test('Browsing invalid players is free and the explorer has centered season navigation with no submission UI',()=>{
  const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011,query:''});assert.match(ui.element('explore-title').textContent,/Team A|Club A/);assert.equal(ui.element('explore-prev-season').hidden,false);
@@ -285,10 +284,10 @@ test('Career logo rings appear only around original endpoints on the board and e
  assert.equal(ring(heads[0]).children.filter(x=>x.className?.includes('career-team-logo')).length,0);
 });
 
-test('Endpoint rings omit only the team on their confirmed or preview connection',()=>{
+test('Endpoint rings omit the connected team only after explicit Add and restore after Undo',()=>{
  const d={...graph,teams:{...graph.teams,E:'Older Team'},groups:[...graph.groups,['E',20092010,[1,6]]]};
  const ui=app();ui.configure(d,'shortest');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});
  const logos=()=>ui.element('explore-chain').children.find(x=>x.dataset.playerId===1).querySelectorAll('*').filter(x=>x.className?.includes('career-team-logo')).map(x=>x.title);
- assert.deepEqual(logos(),['Older Team','Team A']);ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===2).onclick();assert.deepEqual(logos(),['Older Team']);assert.equal(ui.state().score,0);
+ assert.deepEqual(logos(),['Older Team','Team A']);ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===2).onclick();assert.deepEqual(logos(),['Older Team','Team A']);assert.equal(ui.state().score,0);ui.element('explore-add').onclick();assert.deepEqual(logos(),['Older Team']);assert.equal(ui.state().score,1);
  ui.element('explore-undo').onclick();assert.deepEqual(logos(),['Older Team','Team A']);
 });
