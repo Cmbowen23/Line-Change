@@ -358,7 +358,7 @@ function undoExplorerLink(){
 }
 function renderExplorerChain(view){
  const strip=$('explore-chain');strip.replaceChildren();
- const pending=!finished&&route.at(-1)!==end,players=pending?[...route,...[...rightRoute].reverse()]:route,active=currentPlayer();
+ const pending=!finished&&route.at(-1)!==end,players=pending?[...route,...[...rightRoute].reverse()]:route,active=finished&&explorerPreview.length?explorerPreview.at(-1).id:currentPlayer();
  for(let i=0;i<players.length;i++){
   const id=players[i],item=document.createElement('div'),button=document.createElement('button'),caption=document.createElement('span');
   item.className='explore-chain-player';item.dataset.playerId=id;
