@@ -11,6 +11,7 @@ let customSearchEngine;
 let longTarget=null;
 let lookupRequest=0,revealRevision=null;
 let exploreStack=[];
+const explorePositions=new Map();
 const canExplore=()=>true;
 const activeDecades=()=>mode==='daily'||gameStyle==='shortest'?allDecades:selectedDecades;
 let gameStyle=read('baseball-connections-style','shortest');if(gameStyle==='longest')gameStyle='open';if(!['shortest',...snakeStyles].includes(gameStyle))gameStyle='shortest';
@@ -319,9 +320,17 @@ function fillTeamDetails(details,id){
   }
   const note=document.createElement('small');note.textContent=canExplore()?(longest()?'Tap a bold season to explore its roster. Grey seasons cannot be used for your next move.':'All seasons are available. Tap a season to explore its roster.'):(longest()?'Bold teams and seasons count in this game.':'All MLB seasons count in this game.');details.append(note);
 }
-function closeExplorer(){if($('explorer').open)$('explorer').close();exploreStack=[];}
-function openExplorer(view){if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;exploreStack=[view];renderExplorer();if(!$('explorer').open)$('explorer').showModal();}
-function visitExplorer(view){if(view.kind==='roster'&&!seasonExploreAllowed(view.year))return;exploreStack.push(view);renderExplorer();}
+function closeExplorer(){rememberExplorerPosition();exploreStack=[];if($('explorer').open)$('explorer').close();}
+function explorerViewKey(view){return view.kind==='roster'?JSON.stringify(['roster',view.team,view.year,view.query||'']):JSON.stringify(['player',view.id]);}
+function rememberExplorerPosition(){const view=exploreStack.at(-1);if(view&&$('explorer').open)explorePositions.set(explorerViewKey(view),$('explorer').scrollTop||0);}
+function restoreExplorerPosition(){
+ const view=exploreStack.at(-1);if(!view)return;
+ const top=explorePositions.get(explorerViewKey(view))||0;
+ $('explorer').scrollTop=top;
+ requestAnimationFrame(()=>{if($('explorer').open&&exploreStack.at(-1)===view)$('explorer').scrollTop=top;});
+}
+function openExplorer(view){if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;rememberExplorerPosition();exploreStack=[view];renderExplorer();if(!$('explorer').open)$('explorer').showModal();restoreExplorerPosition();}
+function visitExplorer(view){if(view.kind==='roster'&&!seasonExploreAllowed(view.year))return;rememberExplorerPosition();exploreStack.push(view);renderExplorer();restoreExplorerPosition();}
 function renderExplorer(){
  const view=exploreStack.at(-1);if(!view)return;
  const bounds=longest()&&gameStyle==='career'?snakeContext().bounds:null;
@@ -353,9 +362,10 @@ function renderRoster(){
  for(const id of ids){const button=document.createElement('button');button.className='roster-player'+(blocked(id)?' position-excluded':route.includes(id)?' roster-used':'');button.dataset.playerId=id;button.type='button';const body=document.createElement('span'),title=document.createElement('strong'),label=document.createElement('small');title.textContent=name(id);label.textContent=data.players[id][1]+(route.includes(id)?' · Already used':id===end?' · Destination':blocked(id)?' · Outside this round’s position rule':'');body.append(title,label);button.append(portrait(id,name(id)),body);button.onclick=()=>visitExplorer({kind:'player',id,connection:[view.team,view.year]});list.append(button)}
 }
 $('close-explorer').onclick=closeExplorer;
-$('explore-back').onclick=()=>{if(exploreStack.length>1){exploreStack.pop();renderExplorer()}};
-$('explorer').addEventListener('close',()=>{exploreStack=[]});
-$('roster-search').oninput=()=>{const view=exploreStack.at(-1);if(view?.kind==='roster'){view.query=$('roster-search').value;renderRoster()}};
+$('explore-back').onclick=()=>{if(exploreStack.length>1){rememberExplorerPosition();exploreStack.pop();renderExplorer();restoreExplorerPosition()}};
+$('explorer').addEventListener('scroll',rememberExplorerPosition);
+$('explorer').addEventListener('close',()=>{if(!$('explorer').open)exploreStack=[]});
+$('roster-search').oninput=()=>{const view=exploreStack.at(-1);if(view?.kind==='roster'){rememberExplorerPosition();view.query=$('roster-search').value;renderRoster();restoreExplorerPosition()}};
 function finishPath(){return longest()?snake.finish(snakeContext()).path:{players:engine.shortest(route.at(-1),end,route.slice(0,-1))}}
 function nextHint(){return finishPath()?.players}
 function countExploreHint(type){const key=type+':'+route.at(-1);if(!hintedPlayers.has(key)){hintedPlayers.add(key);hintsUsed++;save()}}

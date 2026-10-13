@@ -12,7 +12,7 @@ import {lookupConnection} from '../../public/baseball/lookup.js';
 // A small DOM double exercises the actual app handlers without a browser,
 // network access, or changing anyone's saved daily attempt.
 class Element{
- constructor(tag='div'){this.tagName=tag;this.children=[];this.dataset={};this.style={};this.open=false;this.hidden=false;this.value='';this._text='';this.isConnected=true;this.listeners={};this.classList={add(){},remove(){},toggle(){}}}
+ constructor(tag='div'){this.tagName=tag;this.children=[];this.dataset={};this.style={};this.open=false;this.scrollTop=0;this.hidden=false;this.value='';this._text='';this.isConnected=true;this.listeners={};this.classList={add(){},remove(){},toggle(){}}}
  set textContent(value){this._text=String(value);this.children=[]}
  get textContent(){return this._text+this.children.map(x=>typeof x==='string'?x:x.textContent).join('')}
  append(...items){this.children.push(...items)}
@@ -105,4 +105,18 @@ test('Random-game route target shows a proven maximum or an explicitly bounded l
  await new Promise(resolve=>setImmediate(resolve));assert.match(ui.element('route-target').textContent,/Longest possible route: \d+ (shots|moves)/);assert.match(ui.element('route-target-note').textContent,/Verified maximum/);
  const bounded=app();bounded.configure({...graph,targetBudget:0},'road');bounded.beginFree(1,4);await new Promise(resolve=>setImmediate(resolve));assert.match(bounded.element('route-target').textContent,/Longest route found: \d+ (shots|moves)/);assert.match(bounded.element('route-target-note').textContent,/longer route may exist/);
  ui.configure(graph,'career');ui.beginFree(1,4);ui.daily();const target=ui.element('route-target').textContent;await new Promise(resolve=>setImmediate(resolve));assert.equal(ui.element('route-target').textContent,target);assert.match(target,/Shortest route/);assert.equal(ui.element('route-target-note').hidden,true);
+});
+
+test('Season explorer restores roster scroll after career browsing, closing, Escape, and search changes',()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,4);
+ const roster={kind:'roster',team:'A',year:20102010,query:''},dialog=ui.element('explorer');
+ ui.openExplorer({...roster});dialog.scrollTop=480;
+ const list=ui.element('explore-content').children.find(x=>x.id==='explore-roster');
+ list.children.find(x=>x.tagName==='button'&&x.dataset.playerId===2).onclick();
+ assert.equal(dialog.scrollTop,0);dialog.scrollTop=125;ui.element('explore-back').onclick();assert.equal(dialog.scrollTop,480);
+ ui.element('close-explorer').onclick();dialog.scrollTop=0;ui.openExplorer({...roster});assert.equal(dialog.scrollTop,480);
+ dialog.scrollTop=620;dialog.listeners.scroll();dialog.close();dialog.scrollTop=0;ui.openExplorer({...roster});assert.equal(dialog.scrollTop,620);
+ ui.element('roster-search').value='Start';ui.element('roster-search').oninput();assert.equal(dialog.scrollTop,0);
+ ui.element('roster-search').value='';ui.element('roster-search').oninput();assert.equal(dialog.scrollTop,620);
+ ui.openExplorer({...roster,team:'B'});assert.equal(dialog.scrollTop,0);ui.openExplorer({...roster});assert.equal(dialog.scrollTop,620);
 });
