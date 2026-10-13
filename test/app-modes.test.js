@@ -274,3 +274,13 @@ test('Browsing invalid players is free and the explorer has centered season navi
  assert.ok(rows.every(x=>!x.className.includes('position-excluded')));assert.equal(ui.element('round-position-rule').hidden,true);assert.equal(ui.element('explore-position-rule').hidden,true);
  ui.configure(graph,'shortest','defense');ui.beginFree(1,2);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});assert.equal(ui.element('round-position-rule').textContent,'Defensemen only');assert.equal(ui.element('explore-position-rule').textContent,'Defensemen only');
  });
+
+test('Career logo rings appear only around original endpoints on the board and explorer',()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,4);ui.add(2);
+ const players=ui.element('chain').children.filter(x=>x.dataset.playerId);
+ const ring=player=>player.querySelectorAll('*').find(x=>x.className==='endpoint-portrait');
+ assert.ok(ring(players.find(x=>x.dataset.playerId===1)));assert.ok(ring(players.find(x=>x.dataset.playerId===4)));assert.equal(ring(players.find(x=>x.dataset.playerId===2)),undefined);
+ ui.openExplorer({kind:'player',id:2});const heads=ui.element('explore-chain').children.filter(x=>x.dataset.playerId);
+ assert.ok(ring(heads.find(x=>x.dataset.playerId===1)));assert.ok(ring(heads.find(x=>x.dataset.playerId===4)));assert.equal(ring(heads.find(x=>x.dataset.playerId===2)),undefined);
+ assert.equal(ring(heads[0]).children.filter(x=>x.className?.includes('career-team-logo')).length,1);
+});
