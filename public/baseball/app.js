@@ -11,7 +11,6 @@ let customSearchEngine;
 let longTarget=null;
 let lookupRequest=0,revealRevision=null;
 let rightRoute=[],buildSide='start',shortHistory=[];
-let explorerDraft=null;
 let exploreStack=[];
 const explorePositions=new Map();
 const canExplore=()=>true;
@@ -163,7 +162,7 @@ function renderRoute(target=$('chain'),path=route,links=routeLinks,lookupEngine=
   const next=positionFor(i+1),unconnected=pending&&i===route.length-1,link=document.createElement('li');
   const vertical=next.row!==position.row;link.className='route-link '+(vertical?'route-down':next.column<position.column?'route-left':'route-right')+(unconnected?' route-pending'+(!longest()?' route-both':''):'');
   link.style.gridRow=vertical?position.row+1:position.row;link.style.gridColumn=vertical?position.column:(position.column+next.column)/2;
-  const line=document.createElement('span');line.className='route-line';line.setAttribute('aria-hidden','true');link.append(line);
+  const line=document.createElement('span');line.className='route-line'+(unconnected&&!longest()?' route-gap-mark':'');line.setAttribute('aria-hidden','true');if(unconnected&&!longest())line.append(gapArrow());link.append(line);
   if(unconnected){link.setAttribute('aria-label','Destination not yet reached. Keep adding connections.');link.title='Keep adding connections to reach '+name(end)}else{
    const [team,year]=isLookup?links[i]:longest()?routeLinks[i]:engine.evidence(id,players[i+1])[0];
    const sentence=connectionSentence({fromName:name(id),toName:name(players[i+1]),teamName:teamName(team,year),season:season(year)});link.setAttribute('aria-label',sentence);link.title=sentence;
@@ -343,67 +342,33 @@ function fillTeamDetails(details,id){
   }
   const note=document.createElement('small');note.textContent=canExplore()?(longest()?'Tap a bold season to explore its roster. Grey seasons cannot be used for your next move.':'All seasons are available. Tap a season to explore its roster.'):(longest()?'Bold teams and seasons count in this game.':'All MLB seasons count in this game.');details.append(note);
 }
-function beginExplorerDraft(){
- explorerDraft=longest()||finished?null:{baseLeft:[...route],baseRight:[...rightRoute],left:[...route],right:[...rightRoute],side:buildSide,actions:[],joined:false,generation:revision};
-}
-function evaluateExplorerDraft(actions){
- const left=[...route],right=[...rightRoute];let joined=false;
- for(const action of actions){
-  if(joined)return null;
-  const chain=action.side==='end'?right:left,other=action.side==='end'?left:right,id=action.id,opposite=other.at(-1);
-  if(id!==start&&id!==end&&!matchesPosition(data.players[id],gamePosition))return null;
-  if([...left,...right].includes(id)&&id!==opposite)return null;
-  const evidence=engine.evidence(chain.at(-1),id).filter(g=>!action.connection||(g[0]===action.connection[0]&&g[1]===action.connection[1]));
-  if(!evidence.length)return null;
-  if(id!==opposite)chain.push(id);
-  joined=id===opposite||engine.evidence(id,opposite).length>0;
+function gapArrow(double=true){
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 100 24');svg.setAttribute('aria-hidden','true');
+ for(const [d,dash] of [['M 15 12 H 85',true],[double?'M 15 2 L 4 12 L 15 22 M 85 2 L 96 12 L 85 22':'M 85 2 L 96 12 L 85 22',false]]){
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',d);path.setAttribute('fill','none');path.setAttribute('stroke','currentColor');path.setAttribute('stroke-width','3');path.setAttribute('stroke-linecap','round');path.setAttribute('stroke-linejoin','round');if(dash)path.setAttribute('stroke-dasharray','7 5');svg.append(path);
  }
- return {left,right,joined};
-}
-function explorerVerdict(id,connection=null){
- if(!explorerDraft)return eligibility(id,connection);
- if(explorerDraft.joined)return {allowed:false,reason:'Ready to submit'};
- const chain=explorerDraft.side==='end'?explorerDraft.right:explorerDraft.left,other=explorerDraft.side==='end'?explorerDraft.left:explorerDraft.right,opposite=other.at(-1);
- if(id!==start&&id!==end&&!matchesPosition(data.players[id],gamePosition))return {allowed:false,reason:'Unavailable for this round'};
- if([...explorerDraft.left,...explorerDraft.right].includes(id)&&id!==opposite)return {allowed:false,reason:'Already selected'};
- return canAddPlayer(engine,chain,opposite,id,{finished,connection});
-}
-function previewExplorerPlayer(id,connection){
- if(!explorerDraft||!explorerVerdict(id,connection).allowed)return false;
- const action={id,connection,side:explorerDraft.side},actions=[...explorerDraft.actions,action],next=evaluateExplorerDraft(actions);
- if(!next)return false;
- Object.assign(explorerDraft,next,{actions});return true;
-}
-function removeExplorerPreview(index){
- if(!explorerDraft)return;
- const actions=explorerDraft.actions.slice(0,index),next=evaluateExplorerDraft(actions);if(!next)return;
- Object.assign(explorerDraft,next,{actions});renderExplorer();
-}
-function submitExplorerDraft(){
- const draft=explorerDraft;if(!draft||!draft.actions.length||finished||solving)return;
- if(draft.generation!==revision||JSON.stringify(draft.baseLeft)!==JSON.stringify(route)||JSON.stringify(draft.baseRight)!==JSON.stringify(rightRoute)||!evaluateExplorerDraft(draft.actions)){$('explore-feedback').textContent='The game changed. Reopen the explorer to try again.';return;}
- const actions=[...draft.actions];explorerDraft=null;
- for(const action of actions){buildSide=action.side;add(action.id,action.connection);if(finished)break;}
- if(!finished){beginExplorerDraft();exploreStack=[{kind:'player',id:currentPlayer()}];renderExplorer();restoreExplorerPosition();}
+ return svg;
 }
 function renderExplorerChain(view){
  const strip=$('explore-chain');strip.replaceChildren();
- const draft=explorerDraft,left=draft?.left||route,right=draft?.right||rightRoute;
- const pending=!finished&&route.at(-1)!==end,players=pending?[...left,...[...right].reverse()]:route;
- const side=draft?.side||buildSide,origin=side==='end'?end:start;
+ const pending=!finished&&route.at(-1)!==end,players=pending?[...route,...[...rightRoute].reverse()]:route,active=currentPlayer();
  for(let i=0;i<players.length;i++){
   const id=players[i],item=document.createElement('div'),button=document.createElement('button'),caption=document.createElement('span');
-  const index=draft?.actions.findIndex(action=>action.id===id)??-1;
-  item.className='explore-chain-player'+(index>=0?' preview-player':'');item.dataset.playerId=id;
-  button.type='button';button.className='explore-chain-head'+(id===origin?' selected-origin':'');button.setAttribute('aria-label','Explore '+name(id));button.setAttribute('aria-pressed',String(id===origin));button.append(portrait(id,name(id)));caption.textContent=name(id)+(longest()&&gameStyle==='career'&&(id===start||id===end)?' '+season(id===start?snakeContext().bounds.first:snakeContext().bounds.last):'');button.append(caption);
-  button.onclick=()=>{if(draft&&(id===start||id===end)){draft.side=id===end?'end':'start';buildSide=draft.side;save();render();}visitExplorer({kind:'player',id});};item.append(button);
-  if(index>=0){const remove=document.createElement('button');remove.type='button';remove.className='remove-preview';remove.textContent='×';remove.setAttribute('aria-label','Remove '+name(id)+' and later preview players');remove.onclick=()=>removeExplorerPreview(index);item.append(remove);}
-  strip.append(item);
-  if(i<players.length-1){const link=document.createElement('span'),gap=pending&&i===left.length-1;link.className='explore-chain-arrow'+(gap||index>=0||draft?.actions.some(a=>a.id===players[i+1])?' preview-link':'');link.textContent=gap&&!draft?.joined?'↔':link.className.includes('preview-link')?'⇢':'→';link.setAttribute('aria-hidden','true');strip.append(link);}
+  item.className='explore-chain-player';item.dataset.playerId=id;
+  button.type='button';button.className='explore-chain-head'+(id===active?' selected-origin':'');button.setAttribute('aria-label','Explore '+name(id));button.setAttribute('aria-pressed',String(id===active));button.append(portrait(id,name(id)));caption.textContent=name(id)+(longest()&&gameStyle==='career'&&(id===start||id===end)?' '+season(id===start?snakeContext().bounds.first:snakeContext().bounds.last):'');button.append(caption);
+  button.onclick=()=>{if(!longest()&&!finished){if(id===start||id===route.at(-1))buildSide='start';else if(id===end||id===rightRoute.at(-1))buildSide='end';save();render();}visitExplorer({kind:'player',id});};item.append(button);strip.append(item);
+  if(i<players.length-1){
+   const link=document.createElement('div'),gap=pending&&i===route.length-1;link.className='explore-chain-link';
+   if(gap){link.className+=' unconnected';link.append(gapArrow(!longest()))}else{
+    const [team,year]=longest()?routeLinks[i]:engine.evidence(id,players[i+1])[0];
+    const before=document.createElement('span'),after=document.createElement('span'),middle=document.createElement('span'),yearLabel=document.createElement('small');before.textContent=after.textContent='→';before.setAttribute('aria-hidden','true');after.setAttribute('aria-hidden','true');middle.className='explore-chain-team';middle.append(teamLogo(team,data.teams[team]||team));yearLabel.textContent=season(year);middle.append(yearLabel);link.append(before,middle,after);
+   }
+   strip.append(link);
+  }
  }
- $('explore-submit').hidden=!draft;$('explore-submit').disabled=!draft?.actions.length;$('explore-submit').textContent='Submit chain';$('explore-feedback').textContent='';
+ $('explore-target').hidden=longest();$('explore-target').textContent=longest()?'':`Shortest possible route: ${moveLabel(optimal)}`;
 }
-function closeExplorer(){rememberExplorerPosition();explorerDraft=null;exploreStack=[];if($('explorer').open)$('explorer').close();}
+function closeExplorer(){rememberExplorerPosition();exploreStack=[];if($('explorer').open)$('explorer').close();}
 function explorerViewKey(view){return view.kind==='roster'?JSON.stringify(['roster',view.team,view.year,view.query||'']):JSON.stringify(['player',view.id]);}
 function rememberExplorerPosition(){const view=exploreStack.at(-1);if(view&&$('explorer').open)explorePositions.set(explorerViewKey(view),$('explorer').scrollTop||0);}
 function restoreExplorerPosition(){
@@ -412,7 +377,7 @@ function restoreExplorerPosition(){
  $('explorer').scrollTop=top;
  requestAnimationFrame(()=>{if($('explorer').open&&exploreStack.at(-1)===view)$('explorer').scrollTop=top;});
 }
-function openExplorer(view){if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;rememberExplorerPosition();if(!longest()&&!finished){const id=view.kind==='player'?view.id:view.playerId;if(id===start||id===route.at(-1))selectBuildSide('start');else if(id===end||id===rightRoute.at(-1))selectBuildSide('end');}beginExplorerDraft();if(view.kind==='roster')view={...view,playerId:view.playerId??currentPlayer()};exploreStack=[view];renderExplorer();if(!$('explorer').open)$('explorer').showModal();restoreExplorerPosition();}
+function openExplorer(view){if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;rememberExplorerPosition();if(!longest()&&!finished){const id=view.kind==='player'?view.id:view.playerId;if(id===start||id===route.at(-1))selectBuildSide('start');else if(id===end||id===rightRoute.at(-1))selectBuildSide('end');}if(view.kind==='roster')view={...view,playerId:view.playerId??currentPlayer()};exploreStack=[view];renderExplorer();if(!$('explorer').open){$('explorer').showModal();$('close-explorer').focus({preventScroll:true});}restoreExplorerPosition();}
 function visitExplorer(view){if(view.kind==='roster'&&!seasonExploreAllowed(view.year))return;rememberExplorerPosition();if(view.kind==='roster')view={...view,playerId:view.playerId??currentPlayer()};exploreStack.push(view);renderExplorer();restoreExplorerPosition();}
 function rosterNavigation(view){
  const playerId=view.playerId??currentPlayer();
@@ -434,7 +399,7 @@ function renderExplorer(){
  $('explore-step').textContent=bounds?(routeLinks.length?`Next move: a later season than ${season(routeLinks.at(-1)[1])}, ending by ${season(bounds.last)}.`:`First move: ${name(start)}’s first recorded season, ${season(bounds.first)}.`):longest()?`${styleNames[gameStyle]} · ${routeLinks.length} moves taken.`:`Shortest route: ${moveLabel(optimal)}.`;
 
  $('explore-back').disabled=exploreStack.length<2;$('explore-content').replaceChildren();$('roster-search-box').hidden=view.kind!=='roster';
- $('explore-season-nav').hidden=view.kind!=='roster';
+ $('explore-season-nav').hidden=false;$('explore-prev-season').hidden=$('explore-next-season').hidden=view.kind!=='roster';
  if(view.kind==='roster'){
   const {playerId,rosters,index}=rosterNavigation(view);
   $('explore-prev-season').disabled=index<=0;
@@ -447,8 +412,8 @@ function renderExplorer(){
   renderRoster();
  }else{
   $('explore-title').textContent=name(view.id);const profile=document.createElement('div');profile.className='explore-profile';if(longest())profile.append(portrait(view.id,name(view.id)));
-  const verdict=explorerVerdict(view.id,view.connection),button=document.createElement('button');button.textContent=longest()?(verdict.allowed?'Add to chain':verdict.reason):'Preview player';button.disabled=!verdict.allowed;profile.hidden=!longest()&&!verdict.allowed;
-  button.onclick=()=>{if(explorerDraft){if(previewExplorerPlayer(view.id,view.connection))renderExplorer();return;}const before=route.length;add(view.id,view.connection);if(route.length>before){closeExplorer();if(!finished)requestAnimationFrame(()=>{const player=$('chain').querySelector(`[data-player-id="${view.id}"]`);player?.querySelector('summary')?.focus();player?.scrollIntoView({behavior:'smooth',block:'center'})})}else renderExplorer()};profile.append(button);content.append(profile);
+  const verdict=eligibility(view.id,view.connection),button=document.createElement('button');button.textContent=verdict.allowed?(view.id===oppositePlayer()?'Join chains':'Add to chain'):verdict.reason;button.disabled=!verdict.allowed;
+  button.onclick=()=>{rememberExplorerPosition();add(view.id,view.connection);if(!finished){exploreStack=[{kind:'player',id:view.id}];renderExplorer();restoreExplorerPosition();}};profile.append(button);content.append(profile);
 
   for(const record of historyFor(view.id)){
    const row=document.createElement('div');row.className='explore-career-team'+(record.allowed.length?'':' inactive-history');const title=document.createElement(record.allowed.length?'strong':'span');title.textContent=record.name||data.teams[record.team]||record.team;row.append(teamLogo(record.team,title.textContent),title);content.append(row);
@@ -462,15 +427,14 @@ function renderRoster(){
  const rank=id=>blocked(id)?2:usedPlayers().includes(id)&&id!==end?1:0;
  const ids=rosterFor(data,view.team,view.year,activeDecades()).filter(id=>matchesPlayerName(id,name(id),view.query||'')).sort((a,b)=>rank(a)-rank(b));
  const count=document.createElement('p');count.className='explore-note';count.setAttribute('role','status');count.textContent=ids.length?`${ids.length} ${ids.length===1?'player':'players'}`:'No players match this search.';list.append(count);
- for(const id of ids){const button=document.createElement('button');button.className='roster-player'+(blocked(id)?' position-excluded':usedPlayers().includes(id)&&id!==end?' roster-used':'');button.dataset.playerId=id;button.type='button';const body=document.createElement('span'),title=document.createElement('strong'),label=document.createElement('small');title.textContent=name(id);label.textContent=data.players[id][1]+(id===end?' · Destination':usedPlayers().includes(id)?' · Already used':blocked(id)?'':'');body.append(title,label);button.append(portrait(id,name(id)),body);button.onclick=()=>{previewExplorerPlayer(id,[view.team,view.year]);visitExplorer({kind:'player',id,connection:[view.team,view.year]});};list.append(button)}
+ for(const id of ids){const button=document.createElement('button');button.className='roster-player'+(blocked(id)?' position-excluded':usedPlayers().includes(id)&&id!==end?' roster-used':'');button.dataset.playerId=id;button.type='button';const body=document.createElement('span'),title=document.createElement('strong'),label=document.createElement('small');title.textContent=name(id);label.textContent=data.players[id][1]+(id===end?' · Destination':usedPlayers().includes(id)?' · Already used':blocked(id)?'':'');body.append(title,label);button.append(portrait(id,name(id)),body);button.onclick=()=>{visitExplorer({kind:'player',id,connection:[view.team,view.year]});};list.append(button)}
 }
 $('close-explorer').onclick=closeExplorer;
-$('explore-submit').onclick=submitExplorerDraft;
 $('explore-prev-season').onclick=()=>changeExplorerSeason(-1);
 $('explore-next-season').onclick=()=>changeExplorerSeason(1);
 $('explore-back').onclick=()=>{if(exploreStack.length>1){rememberExplorerPosition();exploreStack.pop();renderExplorer();restoreExplorerPosition()}};
 $('explorer').addEventListener('scroll',rememberExplorerPosition);
-$('explorer').addEventListener('close',()=>{if(!$('explorer').open){explorerDraft=null;exploreStack=[]}});
+$('explorer').addEventListener('close',()=>{if(!$('explorer').open){exploreStack=[]}});
 $('roster-search').oninput=()=>{const view=exploreStack.at(-1);if(view?.kind==='roster'){rememberExplorerPosition();view.query=$('roster-search').value;renderRoster();restoreExplorerPosition()}};
 function finishPath(){return longest()?snake.finish(snakeContext()).path:{players:engine.shortest(currentPlayer(),oppositePlayer(),[...route.slice(0,-1),...rightRoute.slice(0,-1)])}}
 function nextHint(){return finishPath()?.players}
