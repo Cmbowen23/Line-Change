@@ -267,3 +267,10 @@ test('Browsing invalid players is free and the explorer has centered season navi
  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');assert.doesNotMatch(html,/id="explore-submit"|Submit chain|id="build-sides"/);assert.match(html,/Previous season/);assert.match(html,/Next season/);
  assert.ok(ui.element('chain').children.some(x=>x.className?.includes('route-pending')&&x.children.some(line=>line.className?.includes('route-gap-mark'))));
 });
+
+ test('Open Roster does not mute unused positions and restrictions have matching labels on board and explorer',()=>{
+ const ui=app();ui.configure(graph,'shortest','any');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});
+ const rows=ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.filter(x=>x.tagName==='button');
+ assert.ok(rows.every(x=>!x.className.includes('position-excluded')));assert.equal(ui.element('round-position-rule').hidden,true);assert.equal(ui.element('explore-position-rule').hidden,true);
+ ui.configure(graph,'shortest','defense');ui.beginFree(1,2);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});assert.equal(ui.element('round-position-rule').textContent,'Defensemen only');assert.equal(ui.element('explore-position-rule').textContent,'Defensemen only');
+ });

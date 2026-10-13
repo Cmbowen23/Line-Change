@@ -17,7 +17,9 @@ const explorePositions=new Map();
 const canExplore=()=>true;
 const activeDecades=()=>mode==='daily'||gameStyle==='shortest'?allDecades:selectedDecades;
 let gameStyle=read('line-change-style','shortest');if(gameStyle==='longest')gameStyle='open';if(!['shortest',...snakeStyles].includes(gameStyle))gameStyle='shortest';
-let position=read('line-change-position','random');if(!['random',...positions].includes(position))position='random';
+let position=read('line-change-position','any');if(!['random',...positions].includes(position))position='any';
+// Older versions assigned Random implicitly. Keep it only after an explicit choice.
+if(position==='random'&&!read('line-change-position-explicit',false))position='any';
 let gamePosition='any',snake=null,lost=false,solving=false,revision=0,worker=null,workerId=0;const workerRequests=new Map();
 const longest=()=>mode==='free'&&snakeStyles.includes(gameStyle);
 const positionRuleTitles={defense:'Defensemen only',goalie:'Goalies only',forward:'Forwards only'};
@@ -70,6 +72,7 @@ function renderStars(element,stars,label){
 }
 function renderRoundScore(){
 
+ const rule=activePositionRule();$('round-position-rule').hidden=!rule;$('round-position-rule').textContent=rule;
  const shots=currentShortestScore(),stars=dailyStars(shots,optimal,revealed);
  $('daily-stars').hidden=mode!=='daily';
  if(mode==='daily')renderStars($('daily-stars'),stars,revealed?'Answer revealed — no stars':`${stars} ${finished?'stars earned':'stars available'}`);
@@ -373,6 +376,7 @@ function renderExplorerChain(view){
    strip.append(link);
   }
  }
+ const rule=activePositionRule();$('explore-position-rule').hidden=!rule;$('explore-position-rule').textContent=rule;
  $('explore-target').hidden=longest();$('explore-target').textContent=longest()?'':`Shortest possible route: ${shotLabel(optimal)}`;
 }
 function closeExplorer(){rememberExplorerPosition();explorerPreview=[];exploreStack=[];if($('explorer').open)$('explorer').close();}
@@ -455,7 +459,7 @@ function countExploreHint(type){const key=type+':'+currentPlayer();if(!hintedPla
 $('roster-hint').onclick=()=>{if(finished||solving)return;const finish=finishPath(),path=finish?.players;if(!path||path.length<2)return;const [team,year]=longest()?finish.links[0]:engine.evidence(path[0],path[1])[0];countExploreHint('roster');openExplorer({kind:'roster',team,year,query:''})};
 $('player-hint').onclick=()=>{if(finished||solving)return;const path=nextHint();if(!path||path.length<2)return;countExploreHint('player');openExplorer({kind:'player',id:path[1]})};
 $('game-style').onchange=()=>{revision++;gameStyle=$('game-style').value;write('line-change-style',gameStyle);renderSettings();if(snakeStyles.includes(gameStyle)){selectedDecades=[...allDecades];renderDecades();changeDecades();$('setup-status').textContent='All decades selected for Snake. You can narrow them above.'}};
-$('position-rule').onchange=()=>{revision++;position=$('position-rule').value;write('line-change-position',position)};
+$('position-rule').onchange=()=>{revision++;position=$('position-rule').value;write('line-change-position',position);write('line-change-position-explicit',true)};
 $('restart-game').onclick=$('completion-restart').onclick=()=>beginFree(start,end,gamePosition);
 $('difficulty').onchange=()=>{revision++;difficulty=$('difficulty').value;write('line-change-difficulty',difficulty)};
 $('close-completion').onclick=$('view-completed-route').onclick=closeCompletion;
