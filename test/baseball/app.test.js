@@ -120,3 +120,20 @@ test('Season explorer restores roster scroll after career browsing, closing, Esc
  ui.element('roster-search').value='';ui.element('roster-search').oninput();assert.equal(dialog.scrollTop,620);
  ui.openExplorer({...roster,team:'B'});assert.equal(dialog.scrollTop,0);ui.openExplorer({...roster});assert.equal(dialog.scrollTop,620);
 });
+
+
+test('Roster arrows follow the explored career across seasons and trades, preserve scroll, and obey Career Run years',()=>{
+ const d={...graph,teams:{A:'Team A',B:'Team B',C:'Team C',D:'Team D'},groups:[['A',20102010,[1,2]],['B',20112011,[2,3]],['C',20112011,[2,3]],['D',20122012,[2,4]]]};
+ const ui=app();ui.configure(d,'shortest');ui.beginFree(1,4);
+ ui.openExplorer({kind:'roster',playerId:2,team:'A',year:20102010,query:''});
+ assert.equal(ui.element('explore-season-nav').hidden,false);assert.equal(ui.element('explore-prev-season').disabled,true);assert.equal(ui.element('explore-next-season').disabled,false);assert.match(ui.element('explore-season-context').textContent,/1 of 4/);
+ ui.element('explorer').scrollTop=340;ui.element('explore-next-season').onclick();assert.match(ui.element('explore-title').textContent,/Team B/);assert.equal(ui.element('explorer').scrollTop,0);
+ ui.element('explore-next-season').onclick();assert.match(ui.element('explore-title').textContent,/Team C/);ui.element('explore-next-season').onclick();assert.match(ui.element('explore-title').textContent,/Team D/);assert.equal(ui.element('explore-next-season').disabled,true);
+ ui.element('explore-next-season').onclick();assert.match(ui.element('explore-title').textContent,/Team D/);
+ for(let i=0;i<3;i++)ui.element('explore-prev-season').onclick();assert.match(ui.element('explore-title').textContent,/Team A/);assert.equal(ui.element('explorer').scrollTop,340);assert.deepEqual(ui.state().route,[1]);
+ ui.openExplorer({kind:'player',id:2});assert.equal(ui.element('explore-season-nav').hidden,true);
+ const seasons=ui.element('explore-content').children.find(x=>x.className==='explore-seasons');seasons.children.find(x=>x.tagName==='button').onclick();assert.match(ui.element('explore-season-context').textContent,/1 of 4/);
+ ui.element('explore-next-season').onclick();ui.element('explore-back').onclick();assert.equal(ui.element('explore-title').textContent,d.players[2][0]);
+ ui.configure(d,'career');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:2,team:'A',year:20102010,query:''});assert.equal(ui.element('explore-next-season').disabled,true);
+ ui.add(2,['A',20102010]);ui.openExplorer({kind:'roster',playerId:2,team:'B',year:20112011,query:''});assert.equal(ui.element('explore-prev-season').disabled,true);assert.equal(ui.element('explore-next-season').disabled,false);
+});

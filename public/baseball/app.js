@@ -315,7 +315,7 @@ function fillTeamDetails(details,id){
   if(longest()&&gameStyle==='career'){const progress=document.createElement('small');progress.className='history-progress';progress.textContent=routeLinks.length?`Continue after ${season(routeLinks.at(-1)[1])}. Earlier seasons are greyed out.`:`First move: ${season(snakeContext().bounds.first)} only.`;details.append(progress)}
   for(const record of historyFor(id)){
    const row=document.createElement('div');row.className='endpoint-team';const team=document.createElement(record.allowed.length?'strong':'span');team.textContent=record.name||data.teams[record.team]||record.team;row.append(team);
-   const allowed=document.createElement('div');allowed.className='endpoint-years';if(canExplore()){for(const year of record.allowed){const button=document.createElement('button');button.type='button';button.className='season-link';button.textContent=season(year);button.disabled=!seasonExploreAllowed(year);button.setAttribute('aria-label',`Explore ${record.name||data.teams[record.team]||record.team} ${season(year)} roster`);button.onclick=()=>openExplorer({kind:'roster',team:record.team,year,query:''});allowed.append(button)}}else{const text=document.createElement('strong');text.textContent=seasonRanges(record.allowed);allowed.append(text)}if(record.allowed.length)row.append(allowed);
+   const allowed=document.createElement('div');allowed.className='endpoint-years';if(canExplore()){for(const year of record.allowed){const button=document.createElement('button');button.type='button';button.className='season-link';button.textContent=season(year);button.disabled=!seasonExploreAllowed(year);button.setAttribute('aria-label',`Explore ${record.name||data.teams[record.team]||record.team} ${season(year)} roster`);button.onclick=()=>openExplorer({kind:'roster',playerId:id,team:record.team,year,query:''});allowed.append(button)}}else{const text=document.createElement('strong');text.textContent=seasonRanges(record.allowed);allowed.append(text)}if(record.allowed.length)row.append(allowed);
    const outside=record.seasons.filter(s=>!record.allowed.includes(s));if(outside.length){const rest=document.createElement('span');rest.className='endpoint-years outside-years';rest.textContent=seasonRanges(outside);row.append(rest)}details.append(row);
   }
   const note=document.createElement('small');note.textContent=canExplore()?(longest()?'Tap a bold season to explore its roster. Grey seasons cannot be used for your next move.':'All seasons are available. Tap a season to explore its roster.'):(longest()?'Bold teams and seasons count in this game.':'All MLB seasons count in this game.');details.append(note);
@@ -329,8 +329,19 @@ function restoreExplorerPosition(){
  $('explorer').scrollTop=top;
  requestAnimationFrame(()=>{if($('explorer').open&&exploreStack.at(-1)===view)$('explorer').scrollTop=top;});
 }
-function openExplorer(view){if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;rememberExplorerPosition();exploreStack=[view];renderExplorer();if(!$('explorer').open)$('explorer').showModal();restoreExplorerPosition();}
-function visitExplorer(view){if(view.kind==='roster'&&!seasonExploreAllowed(view.year))return;rememberExplorerPosition();exploreStack.push(view);renderExplorer();restoreExplorerPosition();}
+function openExplorer(view){if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;rememberExplorerPosition();if(view.kind==='roster')view={...view,playerId:view.playerId??route.at(-1)};exploreStack=[view];renderExplorer();if(!$('explorer').open)$('explorer').showModal();restoreExplorerPosition();}
+function visitExplorer(view){if(view.kind==='roster'&&!seasonExploreAllowed(view.year))return;rememberExplorerPosition();if(view.kind==='roster')view={...view,playerId:view.playerId??route.at(-1)};exploreStack.push(view);renderExplorer();restoreExplorerPosition();}
+function rosterNavigation(view){
+ const playerId=view.playerId??route.at(-1);
+ const rosters=historyFor(playerId).flatMap(record=>record.allowed.map(year=>({kind:'roster',playerId,team:record.team,year,query:''}))).sort((a,b)=>a.year-b.year||a.team.localeCompare(b.team));
+ const index=rosters.findIndex(item=>item.team===view.team&&item.year===view.year);
+ return {playerId,rosters,index};
+}
+function changeExplorerSeason(direction){
+ const view=exploreStack.at(-1);if(view?.kind!=='roster')return;
+ const {rosters,index}=rosterNavigation(view);const next=rosters[index+direction];if(index<0||!next)return;
+ rememberExplorerPosition();exploreStack[exploreStack.length-1]=next;renderExplorer();restoreExplorerPosition();
+}
 function renderExplorer(){
  const view=exploreStack.at(-1);if(!view)return;
  const bounds=longest()&&gameStyle==='career'?snakeContext().bounds:null;
@@ -338,6 +349,13 @@ function renderExplorer(){
  $('explore-step').textContent=bounds?(routeLinks.length?`Next move: a later season than ${season(routeLinks.at(-1)[1])}, ending by ${season(bounds.last)}.`:`First move: ${name(start)}’s first recorded season, ${season(bounds.first)}.`):longest()?`${styleNames[gameStyle]} · ${routeLinks.length} moves taken.`:`Shortest route: ${moveLabel(optimal)} · ${positionNames[gamePosition]}.`;
  const rule=activePositionRule();$('explore-position-rule').hidden=!rule;$('explore-position-rule').textContent=rule?`${rule} · Intermediate players only; endpoints unrestricted.`:'';
  $('explore-back').disabled=exploreStack.length<2;$('explore-content').replaceChildren();$('roster-search-box').hidden=view.kind!=='roster';
+ $('explore-season-nav').hidden=view.kind!=='roster';
+ if(view.kind==='roster'){
+  const {playerId,rosters,index}=rosterNavigation(view);
+  $('explore-prev-season').disabled=index<=0;
+  $('explore-next-season').disabled=index<0||index>=rosters.length-1;
+  $('explore-season-context').textContent=`${name(playerId)} · ${index<0?'Roster':`${index+1} of ${rosters.length}`}`;
+ }
  const content=$('explore-content');
  if(view.kind==='roster'){
   $('explore-title').textContent=`${teamName(view.team,view.year)} · ${season(view.year)}`;$('roster-search').value=view.query||'';
@@ -349,7 +367,7 @@ function renderExplorer(){
   const note=document.createElement('p');note.className='explore-note';note.textContent=verdict.allowed?(!longest()&&view.id!==end&&engine.evidence(view.id,end).length?`This player connects to ${name(route.at(-1))} and ${name(end)}. Add them to finish automatically in one move; the destination link takes no extra move.`:`This player connects to ${name(route.at(-1))}. Adding them takes one move.`):'You can keep exploring this career without adding a player.';content.append(note);
   for(const record of historyFor(view.id)){
    const row=document.createElement('div');row.className='explore-career-team'+(record.allowed.length?'':' inactive-history');const title=document.createElement(record.allowed.length?'strong':'span');title.textContent=record.name||data.teams[record.team]||record.team;row.append(teamLogo(record.team,title.textContent),title);content.append(row);
-   const seasons=document.createElement('div');seasons.className='explore-seasons';for(const year of record.seasons){const allowed=record.allowed.includes(year)&&seasonExploreAllowed(year),link=document.createElement(allowed?'button':'span');link.textContent=season(year);if(allowed){link.type='button';link.className='season-link';link.setAttribute('aria-label',`Explore ${title.textContent} ${season(year)} roster`);link.onclick=()=>visitExplorer({kind:'roster',team:record.team,year,query:''})}else link.className='outside-years';seasons.append(link)}content.append(seasons);
+   const seasons=document.createElement('div');seasons.className='explore-seasons';for(const year of record.seasons){const allowed=record.allowed.includes(year)&&seasonExploreAllowed(year),link=document.createElement(allowed?'button':'span');link.textContent=season(year);if(allowed){link.type='button';link.className='season-link';link.setAttribute('aria-label',`Explore ${title.textContent} ${season(year)} roster`);link.onclick=()=>visitExplorer({kind:'roster',playerId:view.id,team:record.team,year,query:''})}else link.className='outside-years';seasons.append(link)}content.append(seasons);
   }
  }
 }
@@ -362,6 +380,8 @@ function renderRoster(){
  for(const id of ids){const button=document.createElement('button');button.className='roster-player'+(blocked(id)?' position-excluded':route.includes(id)?' roster-used':'');button.dataset.playerId=id;button.type='button';const body=document.createElement('span'),title=document.createElement('strong'),label=document.createElement('small');title.textContent=name(id);label.textContent=data.players[id][1]+(route.includes(id)?' · Already used':id===end?' · Destination':blocked(id)?' · Outside this round’s position rule':'');body.append(title,label);button.append(portrait(id,name(id)),body);button.onclick=()=>visitExplorer({kind:'player',id,connection:[view.team,view.year]});list.append(button)}
 }
 $('close-explorer').onclick=closeExplorer;
+$('explore-prev-season').onclick=()=>changeExplorerSeason(-1);
+$('explore-next-season').onclick=()=>changeExplorerSeason(1);
 $('explore-back').onclick=()=>{if(exploreStack.length>1){rememberExplorerPosition();exploreStack.pop();renderExplorer();restoreExplorerPosition()}};
 $('explorer').addEventListener('scroll',rememberExplorerPosition);
 $('explorer').addEventListener('close',()=>{if(!$('explorer').open)exploreStack=[]});
@@ -382,3 +402,4 @@ $('intro-rules').addEventListener('close',acknowledgeIntro);
 $('help').onclick=()=>$('rules').showModal();$('close-help').onclick=()=>$('rules').close();
 async function load(){try{const r=await fetch('data/baseball.json');if(!r.ok)throw Error('HTTP '+r.status);data=await r.json();const schedule=await fetch('data/daily-puzzles.json');if(!schedule.ok)throw Error('Puzzle schedule unavailable');data.dailySchedule=await schedule.json();const depth=await fetch('data/player-depth.json');if(!depth.ok)throw Error('Player difficulty data unavailable');data.playerDepth=await depth.json();engine=createEngine(data);const shared=parseChallenge(location.href,data);if(shared){gameStyle=shared.style==='longest'?'open':shared.style||'shortest';selectedDecades=shared.decades;engine=createEngine(data,selectedDecades);if(!beginFree(shared.start,shared.end,shared.position||'any')){setupFree();$('setup-status').textContent='No route exists for this shared matchup. Choose new players or decades.'}showStreak()}else daily()}catch(e){if(data?.playerDepth){setupFree();$('setup-status').textContent=e.message;return}status('The baseball data couldn’t load. Check your connection and try again.',true);const b=document.createElement('button');b.textContent='Retry';b.onclick=()=>{b.remove();load()};$('status').after(b)}}
 load();document.addEventListener('visibilitychange',()=>{if(!document.hidden&&mode==='daily'&&data&&date!==easternDate())daily()});
+
