@@ -414,6 +414,7 @@ function renderExplorer(){
  const bounds=longest()&&gameStyle==='career'?snakeContext().bounds:null;
 
  renderExplorerChain(view);
+ $('explore-step').hidden=!longest();
  $('explore-step').textContent=bounds?(routeLinks.length?`Next shot: a later season than ${season(routeLinks.at(-1)[1])}, ending by ${season(bounds.last)}.`:`First shot: ${name(start)}’s rookie season, ${season(bounds.first)}.`):longest()?`${styleNames[gameStyle]} · ${routeLinks.length} shots taken.`:`Shortest route: ${shotLabel(optimal)}.`;
 
  $('explore-back').disabled=exploreStack.length<2;$('explore-content').replaceChildren();$('roster-search-box').hidden=view.kind!=='roster';
@@ -422,7 +423,7 @@ function renderExplorer(){
   const {playerId,rosters,index}=rosterNavigation(view);
   $('explore-prev-season').disabled=index<=0;
   $('explore-next-season').disabled=index<0||index>=rosters.length-1;
-  $('explore-season-context').textContent=`${name(playerId)} · ${index<0?'Roster':`${index+1} of ${rosters.length}`}`;
+  $('explore-season-context').textContent=index<0?'Roster':`${index+1} of ${rosters.length}`;
  }
  const content=$('explore-content');
  if(view.kind==='roster'){
