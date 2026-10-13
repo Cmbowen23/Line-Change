@@ -37,7 +37,7 @@ function app(){
  const timers=[];
  const bindings={timers,...core,...challenges,...presentation,...explore,...modes,createSnake,document,localStorage,location,history:{replaceState(){}},Worker,URL,confirm:()=>{throw Error('Native confirmation must not be used in embedded previews')},navigator:{clipboard:{async writeText(text){this.lastText=text}}},setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout(){},requestAnimationFrame:fn=>fn(),portrait:()=>new Element('span'),teamLogo:()=>new Element('span')};
  const source=readFileSync(new URL('../../public/baseball/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.url/g,"'https://example.com/app.js'").replace(/load\(\);document\.addEventListener\('visibilitychange',[\s\S]*$/,'');
- const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},seedDaily(record){write(key(),record)},setupFree,beginFree,add,daily,share,sharedText(){return navigator.clipboard.lastText},openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],links:[...routeLinks],finished,lost,gamePosition,revealed}},element:id=>$(id)};`)(...Object.values(bindings));return api;
+ const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},seedDaily(record){write(key(),record)},setupFree,beginFree,add,daily,share,sharedText(){return navigator.clipboard.lastText},openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],rightRoute:[...rightRoute],buildSide,score:currentShortestScore(),links:[...routeLinks],finished,lost,gamePosition,revealed}},element:id=>$(id)};`)(...Object.values(bindings));return api;
 }
 const graph={version:'test-mlb',teams:{A:'Club A',B:'Club B',C:'Club C'},puzzles:[[1,4,2]],players:{1:['Start','SS',20102010,20102010],2:['Pitcher','P',20102010,20122012],3:['Outfielder','CF',20102010,20122012],4:['End','C',20122012,20122012]},groups:[['A',20102010,[1,2,3]],['B',20122012,[2,4]],['C',20122012,[3,4]]]};
 test('Position rules stay visible in baseball rosters with eligible players first and the destination exempt',()=>{
@@ -45,7 +45,7 @@ test('Position rules stay visible in baseball rosters with eligible players firs
  const ui=app();ui.configure(d,'shortest','pitcher');assert.equal(ui.beginFree(1,4),true);
  assert.equal(ui.element('round-rule').hidden,false);assert.equal(ui.element('round-rule-title').textContent,'Pitchers only');
  ui.openExplorer({kind:'roster',team:'A',year:20102010});assert.match(ui.element('explore-position-rule').textContent,/Pitchers only.*endpoints unrestricted/);
- const rows=ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.filter(x=>x.tagName==='button');assert.deepEqual(rows.map(x=>x.dataset.playerId),[4,2,3,1]);
+ const rows=ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.filter(x=>x.tagName==='button');assert.deepEqual(rows.map(x=>x.dataset.playerId),[4,2,1,3]);
  assert.ok(!rows[0].className.includes('position-excluded'));const excluded=rows.find(x=>x.dataset.playerId===3);assert.match(excluded.className,/position-excluded/);excluded.onclick();assert.equal(ui.element('explore-title').textContent,'Outfielder');
  const profile=ui.element('explore-content').children.find(x=>x.className==='explore-profile');assert.equal(profile.children.find(x=>x.tagName==='button').disabled,true);
  ui.daily();assert.equal(ui.element('round-rule').hidden,true);ui.openExplorer({kind:'roster',team:'A',year:20102010});assert.equal(ui.element('explore-position-rule').hidden,true);
@@ -136,4 +136,27 @@ test('Roster arrows follow the explored career across seasons and trades, preser
  ui.element('explore-next-season').onclick();ui.element('explore-back').onclick();assert.equal(ui.element('explore-title').textContent,d.players[2][0]);
  ui.configure(d,'career');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:2,team:'A',year:20102010,query:''});assert.equal(ui.element('explore-next-season').disabled,true);
  ui.add(2,['A',20102010]);ui.openExplorer({kind:'roster',playerId:2,team:'B',year:20112011,query:''});assert.equal(ui.element('explore-prev-season').disabled,true);assert.equal(ui.element('explore-next-season').disabled,false);
+});
+
+test('Shortest Chain builds from both endpoints, joins in the middle, counts additions, and undoes the most recent side',()=>{
+ const d={...graph,puzzles:[[1,5,4]],players:{1:['Start','C',20102010,20102010],2:['Left','P',20102010,20112011],3:['Middle','P',20112011,20122012],4:['Right','P',20122012,20132013],5:['Finish','C',20132013,20132013]},groups:[['A',20102010,[1,2]],['B',20112011,[2,3]],['C',20122012,[3,4]],['D',20132013,[4,5]]]};
+ const ui=app();ui.configure(d,'shortest');ui.beginFree(1,5);
+ ui.openExplorer({kind:'player',id:5});assert.equal(ui.state().buildSide,'end');assert.match(ui.element('explore-from').textContent,/Building from Finish.*Current connection: Finish/);
+ ui.element('close-explorer').onclick();ui.add(4);assert.deepEqual(ui.state().rightRoute,[5,4]);assert.equal(ui.state().score,1);assert.equal(ui.state().finished,false);
+ assert.deepEqual(ui.element('chain').children.filter(x=>x.dataset.playerId).map(x=>x.dataset.playerId),[1,4,5]);
+ assert.equal(ui.element('chain').children.filter(x=>x.className?.includes('route-both')).length,1);
+ ui.element('build-from-start').onclick();ui.add(2);assert.equal(ui.state().score,2);ui.element('build-from-end').onclick();ui.element('undo').onclick();assert.deepEqual(ui.state().route,[1]);assert.deepEqual(ui.state().rightRoute,[5,4]);assert.equal(ui.state().buildSide,'start');
+ ui.add(2);ui.add(4);assert.equal(ui.state().finished,false);assert.equal(ui.state().score,2);ui.add(3);assert.equal(ui.state().finished,true);assert.deepEqual(ui.state().route,[1,2,3,4,5]);assert.equal(ui.state().score,3);assert.equal(ui.element('build-sides').hidden,true);
+ assert.equal(ui.element('chain').children.filter(x=>x.className?.includes('route-both')).length,0);
+ ui.beginFree(1,5);ui.element('build-from-end').onclick();ui.add(4);ui.element('roster-hint').onclick();assert.match(ui.element('explore-from').textContent,/Building from Finish.*Current connection: Right/);
+ ui.element('close-explorer').onclick();ui.daily();ui.element('build-from-end').onclick();ui.add(4);ui.daily();assert.deepEqual(ui.state().rightRoute,[5,4]);assert.equal(ui.state().buildSide,'end');assert.equal(ui.state().score,1);
+ ui.configure(d,'road');ui.beginFree(1,5);ui.element('build-from-end').onclick();assert.equal(ui.state().buildSide,'start');assert.equal(ui.element('build-sides').hidden,true);
+});
+
+test('Reverse Shortest Chain enforces intermediate positions, exempts both endpoints, and resets side state on reveal',async()=>{
+ const d={...graph,players:{...graph.players,2:['Allowed','P',20102010,20112011]},groups:[['A',20102010,[1,2,3]],['B',20112011,[2,3,4]]],puzzles:[[1,4,2]]};
+ const ui=app();ui.configure(d,'shortest','pitcher');assert.equal(ui.beginFree(1,4),true);ui.element('build-from-end').onclick();ui.add(3);assert.deepEqual(ui.state().rightRoute,[4]);assert.equal(ui.state().score,0);
+ ui.add(2);assert.deepEqual(ui.state().route,[1,2,4]);assert.equal(ui.state().finished,true);assert.equal(ui.state().score,1);
+ ui.beginFree(1,4);ui.element('build-from-end').onclick();ui.element('give-up').onclick();await ui.element('confirm-reveal').onclick();
+ assert.equal(ui.state().revealed??ui.element('result').textContent.includes('revealed'),true);assert.deepEqual(ui.state().route,[1,2,4]);assert.deepEqual(ui.state().rightRoute,[]);assert.equal(ui.state().score,1);
 });

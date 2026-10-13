@@ -70,3 +70,7 @@ header{max-width:800px;padding:18px 24px}.brand{font-size:24px}main{max-width:80
 
 
 .explore-season-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 10px}.explore-season-nav button{padding:8px 10px;min-height:40px;font-size:12px;white-space:nowrap}.explore-season-nav span{font-size:11px;line-height:1.4;text-align:center;min-width:0}.explore-season-nav button:disabled{opacity:.4;cursor:default}@media(max-width:480px){.explore-season-nav{gap:6px}.explore-season-nav button{font-size:11px;padding:8px}.explore-season-nav span{font-size:10px}}
+
+.build-sides{display:flex;gap:8px;padding:6px 16px;justify-content:center}.build-sides button{font-size:12px;padding:9px 12px;max-width:48%;white-space:normal}.build-sides button[aria-pressed="true"]{background:var(--ink);color:var(--cream)}.active-frontier .portrait{outline:2px solid var(--red);outline-offset:3px}.explore-header .explore-from{font-size:13px;font-weight:700;color:var(--ink);margin:6px 0;line-height:1.4}.route-both .route-line:before{position:absolute;content:'';width:13px;height:13px;border-top:2px solid var(--ink);border-right:2px solid var(--ink);left:1px;top:-6px;transform:rotate(-135deg)}.route-left.route-both .route-line:before{left:auto;right:1px;transform:rotate(45deg)}.route-down.route-both .route-line:before{left:auto;right:-6px;top:1px;transform:rotate(-45deg)}
+
+.route-pending.route-both .route-line:before{border-color:var(--muted)}
