@@ -11,7 +11,7 @@ self.onmessage=event=>{
   if(type==='init'){data=request.data;return}
   if(type==='lookup'){self.postMessage({id,result:lookupConnection(data,request)});return}
   if(type==='random'){
-   const result=request.style==='shortest'?createEngine(data,allDecades).randomMatchup(Math.random,playersFromEras(data,request.decades,request.pool),2,5,request.position,{weights:{2:15,3:25,4:35,5:25},preferFewerRoutes:true,recent:recentMatchups}):randomSnake(data,request.decades,request.style,request.pool);
+   const result=request.style==='shortest'?createEngine(data,allDecades).randomMatchup(Math.random,playersFromEras(data,request.decades,request.pool),2,5,request.position,{preferFewerRoutes:true,recent:recentMatchups}):randomSnake(data,request.decades,request.style,request.pool);
    if(result)[result.start,result.end]=orderMatchup(data,result.start,result.end);
    if(result&&request.style==='shortest'){result.par=minimumShots(result.par);recentMatchups.push([result.start,result.end].sort((a,b)=>a-b).join(':'));if(recentMatchups.length>8)recentMatchups.shift();}
    self.postMessage({id,result});return;

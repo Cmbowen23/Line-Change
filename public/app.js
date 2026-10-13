@@ -19,7 +19,7 @@ let gameStyle=read('line-change-style','shortest');if(gameStyle==='longest')game
 let position=read('line-change-position','any');if(!['random',...positions].includes(position))position='any';
 // Older versions assigned Random implicitly. Keep it only after an explicit choice.
 if(position==='random'&&!read('line-change-position-explicit',false))position='any';
-let randomRuleBag=[];
+let randomRuleBag=[],strikes=0;
 let gamePosition='any',snake=null,lost=false,solving=false,revision=0,worker=null,workerId=0;const workerRequests=new Map();
 const longest=()=>mode==='free'&&snakeStyles.includes(gameStyle);
 const positionRuleTitles={defense:'Defensemen only',goalie:'Goalies only',forward:'Forwards only'};
@@ -30,7 +30,7 @@ const activeChain=()=>!longest()&&!finished&&buildSide==='end'?rightRoute:route;
 const currentPlayer=()=>activeChain().at(-1);
 const oppositePlayer=()=>!longest()&&buildSide==='end'?route.at(-1):longest()?end:rightRoute.at(-1);
 const usedPlayers=()=>longest()||finished?route:[...route,...rightRoute];
-function currentShortestScore(){return shortestShots(route,end)+(finished?0:Math.max(0,rightRoute.length-1));}
+function currentShortestScore(){return shortestShots(route,end)+(finished&&!lost?0:Math.max(0,rightRoute.length-1));}
 function selectBuildSide(side){if(longest()||finished||solving)return;buildSide=side==='end'?'end':'start';$('player-search').value='';$('player-results').replaceChildren();save();render();if($('explorer').open)renderExplorer();}
 
 function eligibility(id,connection=null){
@@ -42,16 +42,16 @@ function eligibility(id,connection=null){
  return canAddPlayer(engine,activeChain(),opposite,id,{finished,connection});
 }
 function solve(type,request){if(!worker){worker=new Worker(new URL('./solver-worker.js',import.meta.url),{type:'module'});worker.postMessage({type:'init',data});worker.onmessage=e=>{const pending=workerRequests.get(e.data.id);if(!pending)return;workerRequests.delete(e.data.id);if(e.data.error)pending.reject(Error(e.data.error));else pending.resolve(e.data.result)};worker.onerror=()=>{for(const pending of workerRequests.values())pending.reject(Error('The route search could not finish. Please try again.'));workerRequests.clear();worker.terminate();worker=null}}const id=++workerId;return new Promise((resolve,reject)=>{workerRequests.set(id,{resolve,reject});worker.postMessage({id,type,...request})})}
-function renderSettings(){$('era-title').textContent=gameStyle==='shortest'?'Which player eras?':'Which connection decades?';$('era-description').textContent=gameStyle==='shortest'?'Choose the eras for your starting and destination players. Connections, player search during play, and roster exploration can use every NHL season.':'Only connections from seasons starting in your selected decades count. Choose one or combine several.';$('snake-description').hidden=!snakeStyles.includes(gameStyle);$('snake-description').textContent=snakeRules[gameStyle]||'';$('position-settings').hidden=gameStyle!=='shortest';$('random-description').textContent=gameStyle==='career'?'Random games pair an earlier rookie season with a later final recorded season, with a verified route between them.':snakeStyles.includes(gameStyle)?'Random games favor players with many connections. Each generated matchup has a verified finish.':'Random games favor 2–4 shots, with occasional one-shot matchups, and prefer fewer shortest answers. Unavailable lengths are skipped.'}
+function renderSettings(){$('era-title').textContent=gameStyle==='shortest'?'Which player eras?':'Which connection decades?';$('era-description').textContent=gameStyle==='shortest'?'Choose the eras for your starting and destination players. Connections, player search during play, and roster exploration can use every NHL season.':'Only connections from seasons starting in your selected decades count. Choose one or combine several.';$('snake-description').hidden=!snakeStyles.includes(gameStyle);$('snake-description').textContent=snakeRules[gameStyle]||'';$('position-settings').hidden=gameStyle!=='shortest';$('random-description').textContent=gameStyle==='career'?'Random games pair an earlier rookie season with a later final recorded season, with a verified route between them.':snakeStyles.includes(gameStyle)?'Random games favor players with many connections. Each generated matchup has a verified finish.':'Random games balance available 1–4-shot lengths and prefer fewer shortest answers. Unavailable lengths are skipped.'}
 let difficulty=read('line-change-difficulty','easy');
 if(!['easy','medium','hard'].includes(difficulty))difficulty='easy';
 const key=()=>`line-change-v1:${data.version}:${date}:${puzzleFor(data,date).slice(0,2).join('-')}`;
 function read(k,fallback){try{return JSON.parse(localStorage.getItem(k))??fallback}catch{return fallback}}
 function write(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{status('Your browser cannot save progress. You can still play.')}}
-function status(s,error=false){$('status').textContent=s;$('status').classList.toggle('error',error)}
+function status(s,error=false){$('status').textContent=s;$('status').classList.toggle('error',error);if($('explorer').open){$('explore-feedback').hidden=!error;$('explore-feedback').textContent=error?s:''}}
 const name=p=>data.players[p][0];
 const season=s=>String(s).slice(0,4)+'–'+String(s).slice(-2);
-function save(){if(mode==='daily')write(key(),{route,rightRoute,buildSide,shortHistory,finished,revealed,hintsUsed,hintedPlayers:[...hintedPlayers]})}
+function save(){if(mode==='daily')write(key(),{route,rightRoute,buildSide,shortHistory,finished,lost,strikes,revealed,hintsUsed,hintedPlayers:[...hintedPlayers]})}
 function showStreak(){$('streak').textContent=streakFor(read('line-change-wins',{}),easternDate())}
 function proof(a,b){const e=longest()?[routeLinks.at(-1)]:engine.evidence(a,b);return e.length?`${data.teams[e[0][0]]||e[0][0]} · ${season(e[0][1])}${e.length>1?` · +${e.length-1} other team-seasons`:''}`:''}
 function render(){
@@ -70,10 +70,11 @@ function renderStars(element,stars,label){
  element.replaceChildren();element.setAttribute('aria-label',label);
  for(let i=1;i<=3;i++){const star=document.createElement('span');star.textContent='★';star.className=i<=stars?'star earned':'star';star.setAttribute('aria-hidden','true');element.append(star)}
 }
-function renderRoundScore(){
+function renderStrikeMarks(element){element.replaceChildren();element.setAttribute('aria-label',`${strikes} of 3 Xs`);for(let i=0;i<3;i++){const mark=document.createElement('span');mark.textContent='×';mark.className=i<strikes?'strike earned':'strike';mark.setAttribute('aria-hidden','true');element.append(mark)}}
+function renderRoundScore(){renderStrikeMarks($('strike-count'));
 
  const rule=activePositionRule();$('round-position-rule').hidden=!rule;$('round-position-rule').textContent=rule;
- const shots=currentShortestScore(),stars=dailyStars(shots,optimal,revealed);
+ const shots=currentShortestScore(),stars=dailyStars(shots,optimal,revealed||lost);
  $('daily-stars').hidden=mode!=='daily';
  if(mode==='daily')renderStars($('daily-stars'),stars,revealed?'Answer revealed — no stars':`${stars} ${finished?'stars earned':'stars available'}`);
  if(longest()){
@@ -97,9 +98,28 @@ async function findLongTarget(){
   if(!longTarget){$('route-target').textContent='Longest target unavailable';$('route-target-note').textContent='Keep building a valid chain. Restart to retry the target search.'}
  }catch(error){if(generation===revision&&longest()){$('route-target').textContent='Longest target unavailable';$('route-target-note').textContent='Keep playing; the route search could not finish.'}}
 }
-function add(p,connection=null,batch=false){
- const verdict=eligibility(p,connection);
- if(!verdict.allowed){if(!finished)status(verdict.reason+'.',true);return}
+function canAttemptPlayer(id){return !!data.players[id]&&!finished&&!solving&&(!usedPlayers().includes(id)||id===oppositePlayer())&&(longest()||id===start||id===end||matchesPosition(data.players[id],gamePosition));}
+function rejectConnection(reason){
+ strikes=Math.min(3,strikes+1);if(strikes===3){finished=lost=true;closeExplorer();}
+ save();render();if($('explorer').open)renderExplorer();status(`× ${strikes}/3 — ${reason}. The player was not added.`,true);if(lost)showCompletion();
+}
+function add(p,connection=null){
+ if(finished||solving)return;
+ const verdict=eligibility(p,connection);if(!verdict.allowed){rejectConnection(verdict.reason);return}
+ if(longest()){
+  const next={...snakeContext(),route:[...route,p],links:[...routeLinks,verdict.evidence.slice(0,2)]};
+  const result=snake.finish(next,{maxStates:20000});
+  if(!result.path){if(result.exhausted){rejectConnection('That link leaves no valid route to the destination');return}
+   const generation=revision;solving=true;render();if($('explorer').open)renderExplorer();status('Checking the proposed connection…');
+   return solve('finish',{decades:selectedDecades,style:gameStyle,start,end,route:next.route,links:next.links}).then(answer=>{if(generation!==revision)return;solving=false;if(answer.path)commitConnection(p,verdict);else if(answer.exhausted)rejectConnection('That link leaves no valid route to the destination');else{render();if($('explorer').open)renderExplorer();status('The route check could not finish. Try another player.',true)}}).catch(error=>{if(generation!==revision)return;solving=false;render();if($('explorer').open)renderExplorer();status(error.message,true)});
+  }
+ }else{
+  const opposite=oppositePlayer(),excluded=usedPlayers().filter(id=>id!==p&&id!==opposite);
+  if(p!==opposite&&!engine.shortest(p,opposite,excluded)){rejectConnection('That link leaves no valid route to the destination');return}
+ }
+ commitConnection(p,verdict);
+}
+function commitConnection(p,verdict){
  const previous=currentPlayer();
  if(longest()){routeLinks.push(verdict.evidence.slice(0,2));route=appendConnection(engine,route,p,end,true)}else{
   const opposite=oppositePlayer();
@@ -108,15 +128,8 @@ function add(p,connection=null,batch=false){
  }$('player-search').value='';$('player-results').replaceChildren();
  for(const details of $('chain').querySelectorAll('.chain-teams[open]'))details.open=false;
  if(route.at(-1)===end){finished=true;if(mode==='daily'){const wins=read('line-change-wins',{});wins[date]=true;write('line-change-wins',wins);showStreak()}}
- if(!finished&&longest()&&gameStyle==='career'&&!snake.finish(snakeContext()).path){finished=true;lost=true}
  save();render();status(lost?'No chronological finish remains. Your run is over—restart to try another route.':finished?'Every link verified. Nice line change.':`Valid connection. ${proof(previous,p)}`);
- if(finished){closeExplorer();showCompletion()}else if(!batch&&longest()&&gameStyle==='open')void checkOpenRun();
-}
-async function checkOpenRun(){
- const generation=revision;let failed=false;solving=true;render();status('Checking whether a legal finish remains…');
- try{const result=await solve('finish',{decades:selectedDecades,style:gameStyle,start,end,route:[...route],links:[...routeLinks]});if(generation!==revision)return;if(!result.path&&result.exhausted){finished=lost=true;closeExplorer()}}
- catch(error){failed=true;if(generation===revision)status(error.message,true)}
- finally{if(generation===revision){solving=false;save();render();if(lost){status('No legal finish remains. Your round is over—restart to try another route.');showCompletion()}else if(!finished&&!failed)status('Valid connection. Keep building your chain.')}}
+ if(finished){closeExplorer();showCompletion()}
 }
 function maybeShowIntro(){
  const firstGame=!read('line-change-rules-seen-v1',false),firstLongest=longest()&&!read('line-change-snake-rules-seen-v2:'+gameStyle,false);
@@ -133,18 +146,18 @@ function acknowledgeIntro(){
 function closeCompletion(){if($('completion').open)$('completion').close()}
 function showCompletion(){
  const shots=longest()?route.length-1:currentShortestScore(),score=longest()?snakeScore(gameStyle,routeLinks):null;
- $('completion-title').textContent=lost?'Run over.':'You’re connected!';
- $('completion-shots').textContent=longest()?`${score.value} ${score.value===1&&score.unit==='shots'?'shot':score.unit}`:`${shots} ${shots===1?'shot':'shots'}`;
- $('completion-stars').hidden=mode!=='daily';if(mode==='daily')renderStars($('completion-stars'),dailyStars(shots,optimal,revealed),`${dailyStars(shots,optimal,revealed)} stars earned`);
+ $('completion-eyebrow').textContent=lost?'ROUND OVER':'LINE COMPLETE';$('completion-title').textContent=lost?'Run over.':'You’re connected!';
+ $('completion-shots').textContent=lost?`${strikes} Xs`:longest()?`${score.value} ${score.value===1&&score.unit==='shots'?'shot':score.unit}`:`${shots} ${shots===1?'shot':'shots'}`;
+ $('completion-stars').hidden=mode!=='daily';if(mode==='daily')renderStars($('completion-stars'),dailyStars(shots,optimal,revealed||lost),`${dailyStars(shots,optimal,revealed||lost)} stars earned`);
  $('completion-minimum').textContent=longest()?(gameStyle==='career'?`${score.span}-year span · ${shots} shots`:`${route.length} unique players`):`Shortest route: ${shotLabel(optimal)}`;
- $('completion-message').textContent=lost?'No legal route to the destination remains. Restart this matchup to try a new line.':longest()?'Every link follows your Snake rules.':shots===optimal?'You found a shortest possible route.':'Every connection verified. You reached the destination!';
- $('completion-restart').hidden=!longest();$('completion-share').hidden=lost;$('completion').showModal();
+ $('completion-message').textContent=lost?'Three Xs. Your round is over. Failed guesses did not change your chain.':longest()?'Every link follows your Snake rules.':shots===optimal?'You found a shortest possible route.':'Every connection verified. You reached the destination!';
+ $('completion-restart').hidden=mode!=='free';$('completion-share').hidden=lost;$('completion').showModal();
 }
 function renderResult(){
  const el=$('result');el.replaceChildren();const heading=document.createElement('h2'),score=document.createElement('div'),desc=document.createElement('p'),snakeResult=longest()?snakeScore(gameStyle,routeLinks):null;
  heading.textContent=lost?'Run over.':revealed?(longest()?'A longer line.':'The shortest line.'):longest()?'That’s a long line.':currentShortestScore()===optimal?'Top of the league.':'You’re connected.';
- score.className='score';score.textContent=longest()?`${snakeResult.value} ${snakeResult.unit.toUpperCase()}${gameStyle==='career'?` · ${snakeResult.span}-YEAR SPAN`:''}`:`${mode==='daily'&&!revealed?dailyStars(currentShortestScore(),optimal)+' STARS · ':''}${shotLabel(currentShortestScore()).toUpperCase()}`;
- desc.textContent=lost?'No finish remains. Restart to try a different chain.':revealed?longest()?'A long valid route revealed.':'Shortest route revealed.':longest()?`You connected ${route.length} unique players.`:currentShortestScore()===optimal?'You used the fewest possible shots.':'A valid route. Try a shorter route in free play.';el.append(heading,score,desc);
+ score.className='score';score.textContent=longest()?`${snakeResult.value} ${snakeResult.unit.toUpperCase()}${gameStyle==='career'?` · ${snakeResult.span}-YEAR SPAN`:''}`:`${mode==='daily'&&!revealed?dailyStars(currentShortestScore(),optimal,revealed||lost)+' STARS · ':''}${shotLabel(currentShortestScore()).toUpperCase()}`;
+ desc.textContent=lost?'Three Xs. Try a new round.':revealed?longest()?'A long valid route revealed.':'Shortest route revealed.':longest()?`You connected ${route.length} unique players.`:currentShortestScore()===optimal?'You used the fewest possible shots.':'A valid route. Try a shorter route in free play.';el.append(heading,score,desc);
  if(hintsUsed){const hintNote=document.createElement('p');hintNote.textContent=`${hintsUsed} hint${hintsUsed===1?'':'s'} used`;el.append(hintNote)}
  if(!revealed&&!lost){const b=document.createElement('button');b.textContent='Share result';b.onclick=share;el.append(b)}
  if(mode==='free'){const b=document.createElement('button');b.className='secondary';b.textContent='Choose another matchup';b.style.marginLeft='8px';b.onclick=setupFree;el.append(b)}
@@ -219,11 +232,12 @@ function appendAllAnswers(parent,lookup=null){
  },0);
 }
 async function share(){const text=`🏒 LINE CHANGE${mode==='daily'?` · ${date}`:' · FREE PLAY'}\n${name(start)} → ${name(end)}\n${'🟩'.repeat(Math.min(longest()?route.length-1:currentShortestScore(),12))}\n${longest()?snakeScore(gameStyle,routeLinks).value+' '+snakeScore(gameStyle,routeLinks).unit:shotLabel(currentShortestScore())+' · Shortest route '+shotLabel(optimal)+(mode==='daily'?' · '+dailyStars(currentShortestScore(),optimal,revealed)+' stars':'')}${longest()?' · '+styleNames[gameStyle]:gamePosition!=='any'?' · '+positionNames[gamePosition]:''} · ${hintsUsed} hints${mode==='daily'?`\n🔥 ${$('streak').textContent} day streak`:''}\n${mode==='free'?gameURL():location.origin}`;try{if(navigator.share)await navigator.share({text});else{await navigator.clipboard.writeText(text);status('Result copied. Share it with your locker room.')}}catch(e){if(e.name!=='AbortError'){status('Copy your result below.');const box=document.createElement('textarea');box.value=text;box.rows=6;box.style.width='100%';$('result').append(box);box.focus();box.select()}}}
-function daily(){if(!data)return;longTarget=null;lookupRequest++;revision++;snake=null;gamePosition='any';lost=solving=false;closeExplorer();closeCompletion();clearChallengeURL();mode='daily';engine=createEngine(data);date=easternDate();$('daily').classList.add('active');$('free').classList.remove('active');$('setup').hidden=true;$('board').hidden=false;$('date').textContent=`DAILY · ${date}`;[start,end,optimal]=puzzleFor(data,date);[start,end]=orderMatchup(data,start,end);optimal=minimumShots(optimal);const stored=read(key(),null);route=[start];rightRoute=[end];buildSide='start';shortHistory=[];routeLinks=[];finished=false;revealed=false;hintsUsed=0;hintedPlayers=new Set();
+function daily(){if(!data)return;longTarget=null;lookupRequest++;revision++;snake=null;gamePosition='any';lost=solving=false;closeExplorer();closeCompletion();clearChallengeURL();mode='daily';engine=createEngine(data);date=easternDate();$('daily').classList.add('active');$('free').classList.remove('active');$('setup').hidden=true;$('board').hidden=false;$('date').textContent=`DAILY · ${date}`;[start,end,optimal]=puzzleFor(data,date);[start,end]=orderMatchup(data,start,end);optimal=minimumShots(optimal);const stored=read(key(),null);route=[start];rightRoute=[end];buildSide='start';shortHistory=[];routeLinks=[];finished=false;revealed=false;hintsUsed=0;strikes=0;hintedPlayers=new Set();
  if(stored?.finished&&Array.isArray(stored.route)&&stored.route[0]===end&&stored.route.at(-1)===start)stored.route=[...stored.route].reverse();
  if(stored&&Array.isArray(stored.route)&&stored.route[0]===start&&stored.route.every((p,i)=>data.players[p]&&(!i||engine.evidence(stored.route[i-1],p).length))){route=stored.route;hintsUsed=Number.isInteger(stored.hintsUsed)&&stored.hintsUsed>=0?stored.hintsUsed:0;hintedPlayers=new Set(stored.hintedPlayers||[]);revealed=stored.revealed===true;finished=(stored.finished===true&&route.at(-1)===end);if(revealed&&!finished){route=[start];revealed=false}}
  if(!finished&&Array.isArray(stored?.rightRoute)&&stored.rightRoute[0]===end&&stored.rightRoute.every((id,i)=>data.players[id]&&!route.includes(id)&&(id===end||matchesPosition(data.players[id],gamePosition))&&(!i||engine.evidence(stored.rightRoute[i-1],id).length)))rightRoute=stored.rightRoute;
  if(!finished){buildSide=stored?.buildSide==='end'?'end':'start';const history=stored?.shortHistory;shortHistory=Array.isArray(history)&&history.filter(x=>x==='start').length===route.length-1&&history.filter(x=>x==='end').length===rightRoute.length-1&&history.every(x=>x==='start'||x==='end')?history:[...Array(route.length-1).fill('start'),...Array(rightRoute.length-1).fill('end')];}
+ strikes=Math.max(0,Math.min(3,Number.isInteger(stored?.strikes)?stored.strikes:0));if(strikes===3){finished=lost=true;}
  $('player-search').value='';$('player-results').replaceChildren();render();showStreak();status(finished?'Today’s attempt is saved. Come back tomorrow for a new matchup.':'Build your chain. Search any NHL player to add a link.');maybeShowIntro();}
 function setupFree(){if(!data)return;longTarget=null;lookupRequest++;revision++;solving=false;closeExplorer();closeCompletion();clearChallengeURL();mode='free';selectedDecades=read('line-change-decades',allDecades);if(!Array.isArray(selectedDecades))selectedDecades=allDecades;selectedDecades=selectedDecades.filter(d=>allDecades.includes(d));engine=createEngine(data,selectedDecades);renderDecades();$('game-style').value=gameStyle;$('position-rule').value=position;renderSettings();$('difficulty').value=difficulty;$('setup-status').textContent='';$('daily').classList.remove('active');$('free').classList.add('active');$('setup').hidden=false;$('board').hidden=true;$('free-controls').hidden=true;$('date').textContent='FREE PLAY · YOUR MATCHUP';$('par').hidden=true;$('par').textContent='';selectedStart=selectedEnd=null;for(const id of ['start-search','end-search'])$(id).value='';for(const id of ['start-results','end-results'])$(id).replaceChildren();resetLookup();updateCustomButtons();$('random-free').disabled=!selectedDecades.length;}
 function autocomplete(inputId,resultId,callback){const input=$(inputId),container=$(resultId);let timer;input.addEventListener('input',()=>{clearTimeout(timer);if(inputId==='start-search')selectedStart=null;if(inputId==='end-search')selectedEnd=null;if(inputId!=='player-search'){lookupRequest++;$('lookup-result').hidden=true;updateCustomButtons();}timer=setTimeout(()=>{container.replaceChildren();if(!engine)return;const custom=inputId!=='player-search';const searchEngine=custom?(customSearchEngine ||= createEngine(data,allDecades)):engine;const matches=searchEngine.search(input.value);const eligible=custom?new Set(playersFromEras(data,selectedDecades)):null;if(!matches.length&&input.value.trim()){const p=document.createElement('p');p.textContent='No matching players.';container.append(p)}for(const p of matches){const button=document.createElement('button');button.type='button';button.textContent=p.name;const details=document.createElement('small');details.textContent=`${p.position} · ${String(p.first).slice(0,4)}–${String(p.last).slice(-4)} · #${p.id}`;const endpointSeason=inputId==='end-search'?p.last:p.first;const neededDecade=Math.floor(Number(endpointSeason)/10000/10)*10;const outside=custom&&(gameStyle==='career'?!selectedDecades.includes(neededDecade):!eligible.has(p.id));if(outside)details.textContent+=` · Include ${neededDecade}s to select`;button.append(details);button.onclick=()=>{if(outside){selectedDecades=[...new Set([...selectedDecades,neededDecade])].sort((a,b)=>a-b);revision++;write('line-change-decades',selectedDecades);engine=createEngine(data,selectedDecades);renderDecades();$('random-free').disabled=false;$('setup-status').textContent=`Included ${neededDecade}s for ${p.name}${gameStyle==='career'?(inputId==='end-search'?"’s final season.":"’s rookie season."):'.'}`}container.replaceChildren();callback(p)};container.append(button)}},100)});input.addEventListener('keydown',e=>{if(e.key==='Escape')container.replaceChildren();if(e.key==='ArrowDown'){e.preventDefault();container.querySelector('button')?.focus()}});container.addEventListener('keydown',e=>{if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const buttons=[...container.querySelectorAll('button')],i=buttons.indexOf(document.activeElement);buttons[(i+(e.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus()}if(e.key==='Escape'){container.replaceChildren();input.focus()}})}
@@ -280,7 +294,7 @@ function beginFree(a,b,restriction=null){
  engine=createEngine(data,gameStyle==='shortest'?allDecades:selectedDecades,{position:gamePosition,start:a,end:b});snake=snakeStyles.includes(gameStyle)?createSnake(data,selectedDecades,gameStyle):null;
  const path=snake?snake.finish(snake.context(a,b)).path?.players:engine.shortest(a,b);
  if(!path||path.length<2){$('setup-status').textContent=snake?'No valid route was found under these Snake rules. Career Run needs both endpoint seasons in your selected decades. Try different players or eras.':'No route exists under this position rule. Choose another position or different players.';return false}
- longTarget=null;mode='free';start=a;end=b;optimal=snake?path.length-1:minimumShots(path.length-1);route=[start];rightRoute=[end];buildSide='start';shortHistory=[];routeLinks=[];finished=revealed=false;hintsUsed=0;hintedPlayers=new Set();
+ longTarget=null;mode='free';start=a;end=b;optimal=snake?path.length-1:minimumShots(path.length-1);route=[start];rightRoute=[end];buildSide='start';shortHistory=[];routeLinks=[];finished=revealed=false;strikes=0;hintsUsed=0;hintedPlayers=new Set();
  $('daily').classList.remove('active');$('free').classList.add('active');$('setup').hidden=true;$('board').hidden=false;$('date').textContent=snake?styleNames[gameStyle].toUpperCase():'FREE PLAY · SHORTEST CHAIN';
  $('player-search').value='';$('player-results').replaceChildren();history.replaceState(null,'',gameURL());
  render();status('Explore a season or search for your next player.');if(snake)void findLongTarget();maybeShowIntro();requestAnimationFrame(()=>$('board').scrollIntoView?.({behavior:'smooth',block:'start'}));return true;
@@ -355,12 +369,12 @@ function gapArrow(double=true){
  }
  return svg;
 }
-function browseExplorerPlayer(id,connection){visitExplorer({kind:'player',id,connection});}
+function browseExplorerPlayer(id,connection){$('explore-feedback').hidden=true;visitExplorer({kind:'player',id,connection});}
 function addExplorerPlayer(){
  const view=exploreStack.at(-1);if(view?.kind!=='player')return;
- if(!eligibility(view.id,view.connection).allowed)return;
- rememberExplorerPosition();add(view.id,view.connection);
- if(!finished){exploreStack=[{kind:'player',id:currentPlayer()}];renderExplorer();restoreExplorerPosition();}
+ if(!canAttemptPlayer(view.id))return;
+ rememberExplorerPosition();const previous=currentPlayer(),result=add(view.id,view.connection);if(result?.then){return result.then(()=>{if(!finished&&currentPlayer()!==previous){exploreStack=[{kind:'player',id:currentPlayer()}];renderExplorer();restoreExplorerPosition();}})}
+ if(!finished&&currentPlayer()!==previous){exploreStack=[{kind:'player',id:currentPlayer()}];renderExplorer();restoreExplorerPosition();}
 }
 function undoExplorerLink(){
  $('undo').onclick();exploreStack=[{kind:'player',id:currentPlayer()}];renderExplorer();restoreExplorerPosition();
@@ -412,7 +426,7 @@ function renderExplorer(){
  const bounds=longest()&&gameStyle==='career'?snakeContext().bounds:null;
 
  renderExplorerChain(view);
- $('explore-add').disabled=view.kind!=='player'||!eligibility(view.id,view.connection).allowed;$('explore-undo').disabled=finished||solving||(longest()?route.length<2||['open','career'].includes(gameStyle):!shortHistory.length);
+ renderStrikeMarks($('explore-strikes'));$('explore-add').disabled=view.kind!=='player'||!canAttemptPlayer(view.id);$('explore-undo').disabled=finished||solving||(longest()?route.length<2||['open','career'].includes(gameStyle):!shortHistory.length);
  $('explore-step').hidden=!longest();
  $('explore-step').textContent=bounds?(routeLinks.length?`Next shot: a later season than ${season(routeLinks.at(-1)[1])}, ending by ${season(bounds.last)}.`:`First shot: ${name(start)}’s rookie season, ${season(bounds.first)}.`):longest()?`${styleNames[gameStyle]} · ${routeLinks.length} shots taken.`:`Shortest route: ${shotLabel(optimal)}.`;
 

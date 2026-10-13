@@ -37,7 +37,7 @@ function app(){
  const timers=[];
  const bindings={timers,...core,...challenges,...presentation,...explore,...modes,createSnake,document,localStorage,location,history:{replaceState(){}},Worker,URL,confirm:()=>true,navigator:{},setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout(){},requestAnimationFrame:fn=>fn(),portrait:()=>new Element('span'),teamLogo:()=>new Element('span')};
  const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.url/g,"'https://example.com/app.js'").replace(/load\(\);document\.addEventListener\('visibilitychange',[\s\S]*$/,'');
- const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},seedDaily(record){write(key(),record)},setupFree,beginFree,add,daily,selectBuildSide,openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],rightRoute:[...rightRoute],buildSide,score:currentShortestScore(),links:[...routeLinks],finished,lost,gamePosition}},element:id=>$(id)};`)(...Object.values(bindings));return api;
+ const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},seedDaily(record){write(key(),record)},setupFree,beginFree,add,daily,selectBuildSide,openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],rightRoute:[...rightRoute],buildSide,score:currentShortestScore(),links:[...routeLinks],finished,lost,gamePosition,strikes}},element:id=>$(id)};`)(...Object.values(bindings));return api;
 }
 const graph={version:'test',teams:{A:'Team A',B:'Team B',C:'Team C',D:'Team D'},puzzles:[[1,4,3]],players:{1:['Start','C',20102011,20102011],2:['Bridge','D',20102011,20122013],3:['Next','G',20122013,20132014],4:['End','C',20132014,20132014],5:['Trap','D',20102011,20142015],6:['Other','R',20142015,20142015]},groups:[['A',20102011,[1,2,5]],['B',20122013,[2,3]],['C',20132014,[3,4]],['D',20142015,[5,6]]]};
 test('Roster browsing sorts and mutes excluded positions without allowing invalid previews',()=>{
@@ -90,9 +90,9 @@ test('Custom search finds Palffy outside selected eras and includes his rookie e
  const result=ui.element('start-results').children.find(x=>x.tagName==='button');assert.ok(result);assert.match(result.textContent,/Ziggy Palffy/);assert.match(result.textContent,/Include 1990s to select/);
  result.onclick();assert.equal(ui.element('start-search').value,'Ziggy Palffy');assert.match(ui.element('setup-status').textContent,/Included 1990s.*rookie season/);
 });
-test('Career Run app ends a dead run, shows restart, blocks undo, and resets the same matchup',()=>{
+test('Career Run rejects dead ends with three Xs, shows restart, and resets the same matchup',()=>{
  const ui=app();ui.configure(graph,'career');assert.equal(ui.beginFree(1,4),true);assert.equal(ui.element('undo').hidden,true);
- ui.element('close-intro').onclick();ui.add(5,['A',20102011]);assert.equal(ui.state().lost,true);assert.equal(ui.state().finished,true);assert.equal(ui.element('completion').open,true);assert.equal(ui.element('completion-title').textContent,'Run over.');assert.equal(ui.element('completion-restart').hidden,false);assert.equal(ui.element('completion-share').hidden,true);
+ ui.element('close-intro').onclick();for(let i=1;i<=3;i++){ui.add(5,['A',20102011]);assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().strikes,i);assert.equal(ui.state().finished,i===3)}assert.equal(ui.state().lost,true);assert.equal(ui.state().finished,true);assert.equal(ui.element('completion').open,true);assert.equal(ui.element('completion-title').textContent,'Run over.');assert.equal(ui.element('completion-restart').hidden,false);assert.equal(ui.element('completion-share').hidden,true);
  ui.element('completion-restart').onclick();assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().lost,false);assert.equal(ui.element('completion').open,false);
  ui.add(2,['A',20102011]);ui.element('undo').onclick();assert.deepEqual(ui.state().route,[1,2]);ui.add(3,['B',20122013]);assert.equal(ui.state().finished,false);ui.add(4,['C',20132014]);assert.equal(ui.element('completion-title').textContent,'You’re connected!');assert.equal(ui.element('completion-shots').textContent,'3 seasons');assert.equal(ui.state().lost,false);
 });
@@ -104,11 +104,11 @@ test('Shortest Chain app enforces restricted bridges, auto-finishes, and Daily r
  const ui=app();ui.configure(d,'shortest','goalie');assert.equal(ui.beginFree(1,4),true);ui.element('close-intro').onclick();ui.add(2);assert.deepEqual(ui.state().route,[1]);ui.add(3);assert.deepEqual(ui.state().route,[1,3,4]);assert.equal(ui.state().finished,true);assert.equal(ui.element('completion-shots').textContent,'1 shot');ui.daily();assert.equal(ui.state().gamePosition,'any');assert.equal(ui.element('give-up').textContent,'Reveal shortest route');
 });
 
-test('Open Ice accepts a risky shot then ends the round on a proven dead end, with restart and no undo',async()=>{
- const ui=app();ui.configure(graph,'open');ui.beginFree(1,4);ui.element('close-intro').onclick();assert.equal(ui.element('undo').hidden,true);
- ui.add(5,['A',20102011]);assert.deepEqual(ui.state().route,[1,5]);await new Promise(resolve=>setImmediate(resolve));
- assert.equal(ui.state().lost,true);assert.equal(ui.state().finished,true);assert.equal(ui.element('completion-title').textContent,'Run over.');assert.equal(ui.element('completion-shots').textContent,'1 shot');
- ui.element('undo').onclick();assert.deepEqual(ui.state().route,[1,5]);ui.element('completion-restart').onclick();assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().lost,false);
+test('Open Ice rejects a dead-end proposal without changing chain or shots and ends only after three Xs',()=>{
+ const ui=app();ui.configure(graph,'open');ui.beginFree(1,4);ui.element('close-intro').onclick();
+ ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});const rows=ui.element('explore-content').children.find(x=>x.id==='explore-roster');rows.children.find(x=>x.dataset.playerId===5).onclick();assert.equal(ui.state().strikes,0);assert.equal(ui.element('explore-add').disabled,false);
+ for(let i=1;i<=3;i++){ui.element('explore-add').onclick();assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().strikes,i);assert.equal(ui.state().score,0);assert.equal(ui.state().finished,i===3)}
+ assert.equal(ui.state().lost,true);assert.equal(ui.element('completion-title').textContent,'Run over.');assert.match(ui.element('completion-message').textContent,/Three Xs/);ui.element('completion-restart').onclick();assert.equal(ui.state().strikes,0);assert.equal(ui.state().lost,false);
 });
 test('Career Run exploration restricts the first shot to rookie year and keeps the dated goal visible',()=>{
  const d={...graph,groups:[...graph.groups,['E',20112012,[1,6]]]};const ui=app();ui.configure(d,'career');assert.equal(ui.beginFree(1,4),true);
@@ -290,4 +290,13 @@ test('Endpoint rings omit the connected team only after explicit Add and restore
  const logos=()=>ui.element('explore-chain').children.find(x=>x.dataset.playerId===1).querySelectorAll('*').filter(x=>x.className?.includes('career-team-logo')).map(x=>x.title);
  assert.deepEqual(logos(),['Older Team','Team A']);ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===2).onclick();assert.deepEqual(logos(),['Older Team','Team A']);assert.equal(ui.state().score,0);ui.element('explore-add').onclick();assert.deepEqual(logos(),['Older Team']);assert.equal(ui.state().score,1);
  ui.element('explore-undo').onclick();assert.deepEqual(logos(),['Older Team','Team A']);
+});
+
+test('Shortest Chain rejects a trap without consuming a shot, keeps Xs after undo, and still allows a valid finish',()=>{
+ const d={...graph,groups:[['A',20102011,[1,5]],['X',20102011,[1,2]],...graph.groups.slice(1)]};const ui=app();ui.configure(d,'shortest');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});
+ ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===5).onclick();assert.equal(ui.state().strikes,0);ui.element('explore-add').onclick();assert.equal(ui.state().strikes,1);assert.deepEqual(ui.state().route,[1]);assert.match(ui.element('explore-feedback').textContent,/no valid route/);assert.equal(ui.element('explore-feedback').hidden,false);
+ ui.add(2);ui.element('undo').onclick();assert.equal(ui.state().strikes,1);ui.add(2);ui.add(3);assert.equal(ui.state().finished,true);assert.equal(ui.state().lost,false);assert.equal(ui.state().score,2);
+});
+test('Three daily Xs persist across reload, earn no stars, and cannot accept more guesses',()=>{
+ const d={...graph,groups:[['A',20102011,[1,5]],['X',20102011,[1,2]],...graph.groups.slice(1)]};const ui=app();ui.configure(d,'shortest');ui.daily();ui.add(5);ui.daily();assert.equal(ui.state().strikes,1);assert.equal(ui.state().finished,false);ui.add(5);ui.add(5);assert.equal(ui.state().lost,true);assert.deepEqual(ui.state().route,[1]);assert.match(ui.element('completion-stars')['aria-label'],/0 stars/);ui.daily();assert.equal(ui.state().strikes,3);assert.equal(ui.state().finished,true);ui.add(2);assert.deepEqual(ui.state().route,[1]);
 });
