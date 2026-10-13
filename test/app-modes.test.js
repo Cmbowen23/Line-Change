@@ -26,10 +26,10 @@ class Element{
  focus(){}
  select(){}
 }
-function app(){
+function app({strict=false}={}){
  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8'),elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(x=>[x[1],new Element()]));
  const document={getElementById:id=>{const found=elements.get(id)||[...elements.values()].flatMap(x=>x.querySelectorAll('*')).find(x=>x.id===id);if(!found&&id==='explore-roster')return null;assert.ok(found,'Missing HTML element '+id);return found},createElement:tag=>new Element(tag),createElementNS:(ns,tag)=>new Element(tag),createTextNode:text=>text,addEventListener(){}};
- const storage=new Map([['line-change-explore','false'],['line-change-daily-explore','false']]),location={href:'https://example.com/',origin:'https://example.com'},localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
+ const storage=new Map([['line-change-explore','false'],['line-change-daily-explore','false'],...(!strict?[['line-change-shortest-only','false']]:[])]),location={href:'https://example.com/',origin:'https://example.com'},localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
  class Worker{
   postMessage(request){if(request.type==='init'){this.data=request.data;return}queueMicrotask(()=>{if(request.type==='lookup'){this.onmessage?.({data:{id:request.id,result:lookupConnection(this.data,request)}});return}const game=createSnake(this.data,request.decades,request.style);this.onmessage?.({data:{id:request.id,result:request.type==='finish'?game.finish(game.context(request.start,request.end,request.route,request.links)):game.longest(game.context(request.start,request.end,request.route,request.links),{seedPath:request.seedPath,budgetMs:this.data.targetBudget??20})}})})}
   terminate(){}
@@ -299,4 +299,13 @@ test('Shortest Chain rejects a trap without consuming a shot, keeps Xs after und
 });
 test('Three daily Xs persist across reload, earn no stars, and cannot accept more guesses',()=>{
  const d={...graph,groups:[['A',20102011,[1,5]],['X',20102011,[1,2]],...graph.groups.slice(1)]};const ui=app();ui.configure(d,'shortest');ui.daily();ui.add(5);ui.daily();assert.equal(ui.state().strikes,1);assert.equal(ui.state().finished,false);ui.add(5);ui.add(5);assert.equal(ui.state().lost,true);assert.deepEqual(ui.state().route,[1]);assert.match(ui.element('completion-stars')['aria-label'],/0 stars/);ui.daily();assert.equal(ui.state().strikes,3);assert.equal(ui.state().finished,true);ui.add(2);assert.deepEqual(ui.state().route,[1]);
+});
+
+test('Shortest-route option defaults on, rejects completable detours from either endpoint, and can be disabled',()=>{
+ const d={...graph,players:{...graph.players,7:['Reverse detour','D',20102011,20132014],8:['Reverse bridge','D',20102011,20132014]},groups:[['A',20102011,[1,2]],['B',20112012,[2,3]],['C',20132014,[3,4]],['D',20102011,[1,5]],['E',20112012,[5,6]],['F',20122013,[6,3]],['G',20132014,[4,7]],['H',20122013,[7,8]],['I',20112012,[8,2]]]};
+ const ui=app({strict:true});ui.configure(d,'shortest');ui.beginFree(1,4);assert.equal(ui.element('shortest-only').checked,true);assert.equal(ui.element('shortest-only-setting').hidden,false);
+ ui.openExplorer({kind:'roster',playerId:1,team:'D',year:20102011});ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===5).onclick();assert.equal(ui.state().strikes,0);ui.element('explore-add').onclick();assert.equal(ui.state().strikes,1);assert.deepEqual(ui.state().route,[1]);assert.match(ui.element('explore-feedback').textContent,/at least 3 shots.*shortest route is 2 shots/);
+ ui.selectBuildSide('end');ui.add(7);assert.equal(ui.state().strikes,2);assert.deepEqual(ui.state().rightRoute,[4]);ui.add(3);ui.selectBuildSide('start');ui.add(2);assert.equal(ui.state().finished,true);assert.equal(ui.state().score,2);
+ ui.beginFree(1,4);ui.element('shortest-only').checked=false;ui.element('shortest-only').onchange();ui.add(5);assert.equal(ui.state().strikes,0);assert.deepEqual(ui.state().route,[1,5]);ui.daily();assert.equal(ui.element('shortest-only').checked,false);
+ ui.configure(d,'career');ui.beginFree(1,4);assert.equal(ui.element('shortest-only-setting').hidden,true);
 });

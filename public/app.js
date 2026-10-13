@@ -20,6 +20,7 @@ let position=read('line-change-position','any');if(!['random',...positions].incl
 // Older versions assigned Random implicitly. Keep it only after an explicit choice.
 if(position==='random'&&!read('line-change-position-explicit',false))position='any';
 let randomRuleBag=[],strikes=0;
+let shortestOnly=read('line-change-shortest-only',true)!==false;
 let gamePosition='any',snake=null,lost=false,solving=false,revision=0,worker=null,workerId=0;const workerRequests=new Map();
 const longest=()=>mode==='free'&&snakeStyles.includes(gameStyle);
 const positionRuleTitles={defense:'Defensemen only',goalie:'Goalies only',forward:'Forwards only'};
@@ -71,7 +72,7 @@ function renderStars(element,stars,label){
  for(let i=1;i<=3;i++){const star=document.createElement('span');star.textContent='★';star.className=i<=stars?'star earned':'star';star.setAttribute('aria-hidden','true');element.append(star)}
 }
 function renderStrikeMarks(element){element.replaceChildren();element.setAttribute('aria-label',`${strikes} of 3 Xs`);for(let i=0;i<3;i++){const mark=document.createElement('span');mark.textContent='×';mark.className=i<strikes?'strike earned':'strike';mark.setAttribute('aria-hidden','true');element.append(mark)}}
-function renderRoundScore(){renderStrikeMarks($('strike-count'));
+function renderRoundScore(){renderStrikeMarks($('strike-count'));$('shortest-only-setting').hidden=longest();$('shortest-only').checked=shortestOnly;$('shortest-only').disabled=finished||solving;
 
  const rule=activePositionRule();$('round-position-rule').hidden=!rule;$('round-position-rule').textContent=rule;
  const shots=currentShortestScore(),stars=dailyStars(shots,optimal,revealed||lost);
@@ -115,7 +116,10 @@ function add(p,connection=null){
   }
  }else{
   const opposite=oppositePlayer(),excluded=usedPlayers().filter(id=>id!==p&&id!==opposite);
-  if(p!==opposite&&!engine.shortest(p,opposite,excluded)){rejectConnection('That link leaves no valid route to the destination');return}
+  const remaining=p===opposite?[p]:engine.shortest(p,opposite,excluded);
+  if(!remaining){rejectConnection('That link leaves no valid route to the destination');return}
+  const bestPossible=Math.max(1,route.length-1+rightRoute.length-1+remaining.length-1);
+  if(shortestOnly&&bestPossible>optimal){rejectConnection(`That link would need at least ${shotLabel(bestPossible)}; the shortest route is ${shotLabel(optimal)}`);return}
  }
  commitConnection(p,verdict);
 }
@@ -397,7 +401,7 @@ function renderExplorerChain(view){
   }
  }
  const rule=activePositionRule();$('explore-position-rule').hidden=!rule;$('explore-position-rule').textContent=rule;
- $('explore-target').hidden=longest();$('explore-target').textContent=longest()?'':`Shortest possible route: ${shotLabel(optimal)}`;
+ $('explore-target').hidden=longest();$('explore-target').textContent=longest()?'':`Shortest possible route: ${shotLabel(optimal)}${shortestOnly?' · Shortest route only':''}`;
 }
 function closeExplorer(){rememberExplorerPosition();exploreStack=[];if($('explorer').open)$('explorer').close();}
 function explorerViewKey(view){return view.kind==='roster'?JSON.stringify(['roster',view.team,view.year,view.query||'']):JSON.stringify(['player',view.id]);}
@@ -460,6 +464,7 @@ function renderRoster(){
  const count=document.createElement('p');count.className='explore-note';count.setAttribute('role','status');count.textContent=ids.length?`${ids.length} ${ids.length===1?'player':'players'}`:'No players match this search.';list.append(count);
  for(const id of ids){const button=document.createElement('button');button.className='roster-player'+(blocked(id)?' position-excluded':usedPlayers().includes(id)&&id!==end?' roster-used':'');button.dataset.playerId=id;button.type='button';const body=document.createElement('span'),title=document.createElement('strong'),label=document.createElement('small');title.textContent=name(id);label.textContent=data.players[id][1]+(id===end?' · Destination':usedPlayers().includes(id)?' · Already used':blocked(id)?'':'');body.append(title,label);button.append(portrait(id,name(id)),body);button.onclick=()=>browseExplorerPlayer(id,[view.team,view.year]);list.append(button)}
 }
+$('shortest-only').onchange=()=>{shortestOnly=$('shortest-only').checked;write('line-change-shortest-only',shortestOnly);render();if($('explorer').open)renderExplorer();status(shortestOnly?'Shortest route only: detours earn an X.':'Longer detours are allowed. Dead ends still earn an X.');};
 $('explore-add').onclick=addExplorerPlayer;
 $('explore-undo').onclick=undoExplorerLink;
 $('close-explorer').onclick=closeExplorer;
