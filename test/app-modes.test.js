@@ -282,5 +282,13 @@ test('Career logo rings appear only around original endpoints on the board and e
  assert.ok(ring(players.find(x=>x.dataset.playerId===1)));assert.ok(ring(players.find(x=>x.dataset.playerId===4)));assert.equal(ring(players.find(x=>x.dataset.playerId===2)),undefined);
  ui.openExplorer({kind:'player',id:2});const heads=ui.element('explore-chain').children.filter(x=>x.dataset.playerId);
  assert.ok(ring(heads.find(x=>x.dataset.playerId===1)));assert.ok(ring(heads.find(x=>x.dataset.playerId===4)));assert.equal(ring(heads.find(x=>x.dataset.playerId===2)),undefined);
- assert.equal(ring(heads[0]).children.filter(x=>x.className?.includes('career-team-logo')).length,1);
+ assert.equal(ring(heads[0]).children.filter(x=>x.className?.includes('career-team-logo')).length,0);
+});
+
+test('Endpoint rings omit only the team on their confirmed or preview connection',()=>{
+ const d={...graph,teams:{...graph.teams,E:'Older Team'},groups:[...graph.groups,['E',20092010,[1,6]]]};
+ const ui=app();ui.configure(d,'shortest');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});
+ const logos=()=>ui.element('explore-chain').children.find(x=>x.dataset.playerId===1).querySelectorAll('*').filter(x=>x.className?.includes('career-team-logo')).map(x=>x.title);
+ assert.deepEqual(logos(),['Older Team','Team A']);ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===2).onclick();assert.deepEqual(logos(),['Older Team']);assert.equal(ui.state().score,0);
+ ui.element('explore-undo').onclick();assert.deepEqual(logos(),['Older Team','Team A']);
 });
