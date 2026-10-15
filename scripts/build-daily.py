@@ -3,11 +3,21 @@ import json,pathlib,collections,random,unicodedata
 R=pathlib.Path(__file__).resolve().parents[1];d=json.loads((R/'public/data/hockey.json').read_text())
 names='''Wayne Gretzky|Mario Lemieux|Gordie Howe|Bobby Orr|Bobby Hull|Brett Hull|Mark Messier|Jaromir Jagr|Sidney Crosby|Alex Ovechkin|Connor McDavid|Nathan MacKinnon|Auston Matthews|Connor Bedard|Leon Draisaitl|Nikita Kucherov|Patrick Kane|Jonathan Toews|Joe Sakic|Steve Yzerman|Nicklas Lidstrom|Sergei Fedorov|Pavel Datsyuk|Henrik Zetterberg|Dominik Hasek|Martin Brodeur|Patrick Roy|Roberto Luongo|Carey Price|Henrik Lundqvist|Marc-Andre Fleury|Ed Belfour|Grant Fuhr|Tony Esposito|Ken Dryden|Bernie Parent|Terry Sawchuk|Glenn Hall|Jacques Plante|Phil Esposito|Jean Beliveau|Maurice Richard|Henri Richard|Guy Lafleur|Marcel Dionne|Gilbert Perreault|Bryan Trottier|Mike Bossy|Denis Potvin|Paul Coffey|Ray Bourque|Chris Chelios|Brian Leetch|Scott Stevens|Scott Niedermayer|Al MacInnis|Chris Pronger|Zdeno Chara|Erik Karlsson|Victor Hedman|Cale Makar|Quinn Hughes|Adam Fox|Roman Josi|Duncan Keith|Drew Doughty|Eric Lindros|Peter Forsberg|Teemu Selanne|Paul Kariya|Pavel Bure|Alexander Mogilny|Mats Sundin|Daniel Alfredsson|Joe Thornton|Jarome Iginla|Mike Modano|Jeremy Roenick|Luc Robitaille|Brendan Shanahan|Mark Recchi|Ron Francis|Doug Gilmour|Adam Oates|Pat LaFontaine|Dale Hawerchuk|Denis Savard|Lanny McDonald|Darryl Sittler|Bobby Clarke|Bill Barber|Rick Tocchet|Cam Neely|Rick Nash|Dany Heatley|Ilya Kovalchuk|Evgeni Malkin|Steven Stamkos|Vincent Lecavalier|Martin St. Louis|Claude Giroux|Anze Kopitar|Patrice Bergeron|Brad Marchand|David Pastrnak|Henrik Sedin|Daniel Sedin|Jason Spezza|Daniel Briere|John Tavares|Jack Hughes|Jack Eichel|Aleksander Barkov|Matthew Tkachuk|Brady Tkachuk|Mikko Rantanen|Kirill Kaprizov|Sebastian Aho|William Nylander|Mitch Marner|Brayden Point|Elias Pettersson|Jonathan Quick|Andrei Vasilevskiy|Sergei Bobrovsky|Connor Hellebuyck|Pekka Rinne|Tuukka Rask|Ryan Miller|Ryan Getzlaf|Corey Perry|Jari Kurri|Peter Stastny|Doug Harvey|Ted Lindsay|Alex Delvecchio|Red Kelly|Frank Mahovlich|Tim Horton|Stan Mikita|Dave Keon|Johnny Bower|Jacques Lemaire|Larry Robinson|Bobby Smith|Guy Carbonneau|Pierre Turgeon|Rod Brind'Amour|Keith Tkachuk|Shane Doan|Saku Koivu|Zach Parise|Ryan Suter|Ryan O'Reilly|Phil Kessel|Patrick Marleau'''.split('|')
 def norm(s):return ''.join(c for c in unicodedata.normalize('NFD',s.lower()) if not unicodedata.combining(c)).replace('-',' ').replace("'",'')
-lookup={norm(p[0]):int(i) for i,p in d['players'].items()}
+# Resolve duplicate names explicitly; never depend on dictionary insertion order.
+lookup=collections.defaultdict(list)
+for player_id,player in d['players'].items():lookup[norm(player[0])].append(int(player_id))
+pinned={'Jack Hughes':8481559,'Elias Pettersson':8480012,'Sebastian Aho':8478427}
 ids=[]
 for name in names:
- assert norm(name) in lookup,('Player not found',name)
- ids.append(lookup[norm(name)])
+ matches=lookup[norm(name)]
+ assert matches,('Player not found',name)
+ if name in pinned:
+  player_id=pinned[name]
+  assert player_id in matches and d['players'][str(player_id)][1]=='C',('Wrong curated player identity',name)
+ else:
+  assert len(matches)==1,('Ambiguous curated name: pin its player ID',name,matches)
+  player_id=matches[0]
+ ids.append(player_id)
 byplayer=collections.defaultdict(list)
 for gi,g in enumerate(d['groups']):
  for p in g[2]:byplayer[p].append(gi)
@@ -36,8 +46,9 @@ while candidates and len(puzzles)<730:
  puzzles.append(p);recent.append(p[:2])
 assert len(puzzles)==730
 existing=R/'public/data/daily-puzzles.json'
-overrides=json.loads(existing.read_text()).get('overrides',{}) if existing.exists() else {}
-existing.write_text(json.dumps({'policy':'Curated notable endpoints; 2–4 links; all NHL players allowed as intermediates','notablePlayerIds':ids,'overrides':overrides,'puzzles':puzzles},separators=(',',':')))
+previous=json.loads(existing.read_text()) if existing.exists() else {}
+overrides=previous.get('overrides',{})
+existing.write_text(json.dumps({'policy':'Curated notable endpoints; 2–4 links; all NHL players allowed as intermediates','notablePlayerIds':ids,'overrides':overrides,'overrideDifficulties':previous.get('overrideDifficulties',{}),'legacyPuzzles':previous.get('legacyPuzzles',previous.get('puzzles',puzzles)),'puzzles':puzzles},separators=(',',':')))
 print(len(ids),'curated players;',len(puzzles),'daily matchups')
 
 # Recompute the weekday ranking whenever the curated source schedule changes.

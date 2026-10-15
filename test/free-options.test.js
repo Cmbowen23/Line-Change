@@ -47,3 +47,20 @@ test('longest random matchups favor broad careers and have legal forward routes'
   if(!decades)assert.ok(pair.span>=20);
  }
 });
+
+test('Easy namesakes resolve to the intended star forwards',()=>{
+ const pool=difficultyPool(data,'easy');
+ for(const [correct,namesake] of [[8480012,8483678],[8478427,8480222],[8481559,8448071]]){
+  assert.ok(pool.includes(correct));assert.ok(!pool.includes(namesake));
+  assert.equal(data.players[correct][1],'C');
+ }
+});
+
+test('random matchups prefer fresh endpoints and allow repeats when necessary',()=>{
+ const tiny={players:{1:['A','C'],2:['B','C'],3:['C','C'],4:['D','C']},groups:[['X',20202021,[1,2,3,4]]]};
+ const engine=createEngine(tiny),options={preferFewerRoutes:true,recentPlayers:[1,2]};
+ const pair=engine.randomMatchup(()=>0.4,null,1,1,'any',options);
+ assert.deepEqual([pair.start,pair.end].sort(),[3,4]);
+ const fallback=engine.randomMatchup(()=>0.4,[1,2],1,1,'any',options);
+ assert.deepEqual([fallback.start,fallback.end].sort(),[1,2]);
+});

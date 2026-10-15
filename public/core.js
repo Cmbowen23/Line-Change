@@ -102,17 +102,23 @@ export function createEngine(data,decades=null,{position='any',start=null,end=nu
   const chooseLength=available=>{if(!options.weights)return available[Math.floor(random()*available.length)];const total=available.reduce((sum,n)=>sum+(options.weights[n]||1),0);let choice=random()*total;for(const n of available){choice-=options.weights[n]||1;if(choice<0)return n}return available.at(-1)};
   const target=chooseLength(lengths),alternatives=new Map();
   let best=null,sampled=0;
+  const recency=new Map();for(const [index,id] of (options.recentPlayers||[]).entries())recency.set(id,index+1+(recency.get(id)||0));
+  const playerPenalty=id=>recency.get(id)||0;
+  const compare=(a,b)=>{for(let i=0;i<a.length;i++)if(a[i]!==b[i])return a[i]<b[i]?-1:1;return 0};
   const assess=(a,ends,shots)=>{
    const choices=[...ends];for(let i=choices.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[choices[i],choices[j]]=[choices[j],choices[i]]}
+   choices.sort((a,b)=>playerPenalty(a)-playerPenalty(b));
    for(const b of choices.slice(0,3)){
     const pairKey=[a,b].sort((x,y)=>x-y).join(':');
     const answers=(restriction==='any'?{allShortest}:createEngine(data,decades,{position:restriction,start:a,end:b})).allShortest(a,b);
-    const candidate={start:a,end:b,par:shots,count:answers.count,recent:options.recent?.includes(pairKey)||false};sampled++;
-    if(!best||Number(candidate.recent)<Number(best.recent)||candidate.recent===best.recent&&candidate.count<best.count)best=candidate;
+    const repeatedPlayers=Number(playerPenalty(a)>0)+Number(playerPenalty(b)>0);
+    const candidate={start:a,end:b,par:shots,score:[repeatedPlayers,playerPenalty(a)+playerPenalty(b),Number(options.recent?.includes(pairKey)||false),answers.count]};sampled++;
+    if(!best||compare(candidate.score,best.score)<0)best=candidate;
    }
   };
   const result=candidate=>({start:candidate.start,end:candidate.end,par:candidate.par});
   for(let i=candidates.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[candidates[i],candidates[j]]=[candidates[j],candidates[i]]}
+  candidates.sort((a,b)=>playerPenalty(a)-playerPenalty(b));
   const visited=new Set();
   for(const a of candidates){
    if(visited.has(a))continue;
@@ -122,7 +128,7 @@ export function createEngine(data,decades=null,{position='any',start=null,end=nu
    if(reachable.length)for(const p of q)visited.delete(p);
    const byLength=new Map();for(const p of reachable){const shots=distance.get(p);if(shots<minShots||shots>maxShots)continue;if(!byLength.has(shots))byLength.set(shots,[]);byLength.get(shots).push(p)}
    for(const [shots,ends] of byLength){if(!alternatives.has(shots))alternatives.set(shots,[]);if(alternatives.get(shots).length<4)alternatives.get(shots).push({start:a,ends})}
-   if(byLength.has(target)){const ends=byLength.get(target);if(!options.preferFewerRoutes)return {start:a,end:ends[Math.floor(random()*ends.length)],par:target};assess(a,ends,target);if(sampled>=12)return result(best)}
+   if(byLength.has(target)){const ends=byLength.get(target);if(!options.preferFewerRoutes)return {start:a,end:ends[Math.floor(random()*ends.length)],par:target};assess(a,ends,target);if((sampled>=12&&best.score[0]===0)||sampled>=36)return result(best)}
   }
   // Some era/difficulty combinations cannot produce every length. Remember
   // their available lengths and choose a valid game within the same range.
@@ -140,14 +146,15 @@ export function orderMatchup(data,start,end){return data.players[start]?.[2]>dat
 export function easternDate(now=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(now)}
 export function dailyDifficultyFor(data,date){
  const weekly=data.dailySchedule?.weeklyDifficulty;
- if(!weekly||date<weekly.startsOn||data.dailySchedule?.overrides?.[date])return null;
+ if(!weekly||date<weekly.startsOn)return null;
+ if(data.dailySchedule?.overrides?.[date]){const label=data.dailySchedule.overrideDifficulties?.[date];return label?{label,shots:Math.max(1,data.dailySchedule.overrides[date][2]-1)}:null;}
  return weekly.days?.[(new Date(date+'T00:00:00Z').getUTCDay()+6)%7]||null;
 }
 export function puzzleFor(data,date){
  if(data.dailySchedule?.overrides?.[date])return data.dailySchedule.overrides[date];
  const day=Math.floor(Date.parse(date+'T00:00:00Z')/86400000),level=dailyDifficultyFor(data,date);
  if(level?.puzzles?.length){const week=Math.floor((day+3)/7);return level.puzzles[((week%level.puzzles.length)+level.puzzles.length)%level.puzzles.length]}
- const puzzles=data.dailySchedule?.puzzles||data.puzzles;
+ const puzzles=(data.dailySchedule?.legacyPuzzles&&date<data.dailySchedule.weeklyDifficulty?.startsOn?data.dailySchedule.legacyPuzzles:null)||data.dailySchedule?.puzzles||data.puzzles;
  return puzzles[((day%puzzles.length)+puzzles.length)%puzzles.length];
 }
 export function streakFor(wins,date){let day=Date.parse(date+'T00:00:00Z'),n=0;if(!wins[date])day-=86400000;while(wins[new Date(day).toISOString().slice(0,10)]){n++;day-=86400000}return n}

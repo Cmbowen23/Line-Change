@@ -20,6 +20,9 @@ let position=read('line-change-position','any');if(!['random',...positions].incl
 // Older versions assigned Random implicitly. Keep it only after an explicit choice.
 if(position==='random'&&!read('line-change-position-explicit',false))position='any';
 let randomRuleBag=[],strikes=0;
+let recentRandomGames=read('line-change-random-history',[]);
+if(!Array.isArray(recentRandomGames))recentRandomGames=[];
+recentRandomGames=recentRandomGames.filter(pair=>Array.isArray(pair)&&pair.length===2&&pair.every(Number.isInteger)).slice(-8);
 let shortestOnly=read('line-change-shortest-only',true)!==false;
 let gamePosition='any',snake=null,lost=false,solving=false,revision=0,worker=null,workerId=0;const workerRequests=new Map();
 const longest=()=>mode==='free'&&snakeStyles.includes(gameStyle);
@@ -317,11 +320,11 @@ async function randomFree(){
  const restrictions=style==='shortest'?(position==='random'?(()=>{if(!randomRuleBag.length){randomRuleBag=[...positions];for(let i=randomRuleBag.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[randomRuleBag[i],randomRuleBag[j]]=[randomRuleBag[j],randomRuleBag[i]]}}return [...randomRuleBag,...positions.filter(value=>!randomRuleBag.includes(value))]})():[position]):['any'];
  $('random-free').disabled=$('random-again').disabled=true;status('Finding a playable matchup…');$('setup-status').textContent='Finding a playable matchup…';
  try{
-  let pair=null,restriction='any';for(const value of restrictions){if(generation!==revision)return;restriction=value;pair=await solve('random',{style,decades,pool,position:value});if(pair||generation!==revision)break}
+  let pair=null,restriction='any';for(const value of restrictions){if(generation!==revision)return;restriction=value;pair=await solve('random',{style,decades,pool,position:value,recentPlayers:recentRandomGames.flat(),recentMatchups:recentRandomGames.map(pair=>[...pair].sort((a,b)=>a-b).join(':'))});if(pair||generation!==revision)break}
   if(generation!==revision)return;
   if(!pair){const message='No playable matchup is available with these rules and difficulty in your selected decades. Add decades or increase the difficulty.';$('setup-status').textContent=message;status(message,true);return}
   if(style==='shortest'&&position==='random')randomRuleBag=randomRuleBag.filter(value=>value!==restriction);
-  beginFree(pair.start,pair.end,restriction);
+  if(beginFree(pair.start,pair.end,restriction)){recentRandomGames.push([pair.start,pair.end]);recentRandomGames=recentRandomGames.slice(-8);write('line-change-random-history',recentRandomGames);}
  }catch(error){if(generation===revision){$('setup-status').textContent=error.message;status(error.message,true)}}finally{$('random-free').disabled=!selectedDecades.length;$('random-again').disabled=false}
 }
 async function copyChallenge(url,feedback){

@@ -30,7 +30,7 @@ test('Daily gets harder through eight full weeks with verified routes and answer
 });
 test('Weekly difficulty preserves current and historical games, respects overrides, and resets Monday in Eastern time',()=>{
  const date='2026-10-13',day=Math.floor(Date.parse(date+'T00:00:00Z')/86400000);
- assert.deepEqual(puzzleFor(data,date),schedule.puzzles[day%schedule.puzzles.length]);assert.equal(dailyDifficultyFor(data,date),null);
+ assert.deepEqual(puzzleFor(data,date),(schedule.legacyPuzzles||schedule.puzzles)[day%(schedule.legacyPuzzles||schedule.puzzles).length]);assert.equal(dailyDifficultyFor(data,date),null);
  assert.equal(dailyDifficultyFor(data,'2026-10-14').label,'Medium');assert.equal(puzzleFor(data,'2026-10-14')[2]-1,2);assert.equal(dailyDifficultyFor(data,'2026-10-15').label,'Challenging');
  assert.equal(dailyDifficultyFor(data,easternDate(new Date('2026-10-19T03:59:59Z'))).label,'Expert');
  assert.equal(dailyDifficultyFor(data,easternDate(new Date('2026-10-19T04:00:00Z'))).label,'Warm-up');
