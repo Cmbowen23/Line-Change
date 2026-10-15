@@ -39,3 +39,7 @@ existing=R/'public/data/daily-puzzles.json'
 overrides=json.loads(existing.read_text()).get('overrides',{}) if existing.exists() else {}
 existing.write_text(json.dumps({'policy':'Curated notable endpoints; 2–4 links; all NHL players allowed as intermediates','notablePlayerIds':ids,'overrides':overrides,'puzzles':puzzles},separators=(',',':')))
 print(len(ids),'curated players;',len(puzzles),'daily matchups')
+
+# Recompute the weekday ranking whenever the curated source schedule changes.
+import subprocess
+subprocess.run(['node',str(R/'scripts/build-daily-weekdays.mjs')],check=True)
