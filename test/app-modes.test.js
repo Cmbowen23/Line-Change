@@ -320,11 +320,27 @@ test('Daily accepts longer teammate routes with strict preference on, while free
 test('Daily charges only absent teammate connections, accepts traps, and does not penalize reused players or wrong season choices',()=>{
  const d={...graph,groups:[['A',20102011,[1,5]],['X',20102011,[1,2]],...graph.groups.slice(1)]};
  const ui=app({strict:true});ui.configure(d,'shortest');ui.daily();ui.add(5);assert.deepEqual(ui.state().route,[1,5]);assert.equal(ui.state().strikes,0);ui.element('undo').onclick();assert.deepEqual(ui.state().route,[1]);
- ui.add(2,['X',19901991]);assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().strikes,0);ui.add(1);assert.equal(ui.state().strikes,0);ui.add(6);assert.equal(ui.state().strikes,1);assert.deepEqual(ui.state().route,[1]);ui.add(2);ui.add(3);assert.equal(ui.state().finished,true);assert.equal(ui.state().strikes,1);
+ ui.add(2,['X',19901991]);assert.deepEqual(ui.state().route,[1,2]);assert.equal(ui.state().strikes,0);ui.element('undo').onclick();ui.add(1);assert.equal(ui.state().strikes,0);ui.add(6);assert.equal(ui.state().strikes,1);assert.deepEqual(ui.state().route,[1]);ui.add(2);ui.add(3);assert.equal(ui.state().finished,true);assert.equal(ui.state().strikes,1);
 });
 
 test('October 14 daily reset ignores the prior attempt, keeps the matchup, and saves the fresh attempt normally',()=>{
  const record={route:[1],rightRoute:[4],strikes:3,finished:true,lost:true};
  const ui=app({day:'2026-10-14'});ui.configure(graph,'shortest');ui.daily();ui.seedPreviousDaily(record);ui.daily();assert.deepEqual(ui.state().route,[1]);assert.deepEqual(ui.state().rightRoute,[4]);assert.equal(ui.state().strikes,0);assert.equal(ui.state().finished,false);ui.add(6);ui.daily();assert.equal(ui.state().strikes,1);assert.equal(ui.state().finished,false);
  const nextDay=app({day:'2026-10-15'});nextDay.configure(graph,'shortest');nextDay.daily();nextDay.seedPreviousDaily(record);nextDay.daily();assert.equal(nextDay.state().strikes,3);assert.equal(nextDay.state().finished,true);
+});
+
+test('Explorer Back restores the originating endpoint before a roster player is submitted',()=>{
+ const d={...graph,puzzles:[[1,5,4]],players:{1:['Start','C',20102011,20102011],2:['Left','D',20102011,20112012],3:['Middle','D',20112012,20122013],4:['Right','D',20122013,20132014],5:['Finish','C',20132014,20132014]},groups:[['A',20102011,[1,2]],['B',20112012,[2,3]],['C',20122013,[3,4]],['D',20132014,[4,5]]]};
+ const ui=app();ui.configure(d,'shortest');ui.beginFree(1,5);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});
+ ui.element('explore-chain').children.find(x=>x.dataset.playerId===5).children[0].onclick();assert.equal(ui.state().buildSide,'end');
+ ui.element('explore-back').onclick();assert.equal(ui.state().buildSide,'start');
+ ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===2).onclick();ui.element('explore-add').onclick();assert.deepEqual(ui.state().route,[1,2]);assert.deepEqual(ui.state().rightRoute,[5]);assert.equal(ui.state().strikes,0);
+ ui.element('explore-chain').children.find(x=>x.dataset.playerId===5).children[0].onclick();ui.element('explore-back').onclick();assert.equal(ui.state().buildSide,'start');assert.equal(ui.element('explore-title').textContent,'Left');
+ ui.openExplorer({kind:'roster',playerId:5,team:'D',year:20132014});ui.element('explore-chain').children.find(x=>x.dataset.playerId===1).children[0].onclick();ui.element('explore-back').onclick();assert.equal(ui.state().buildSide,'end');ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===4).onclick();ui.element('explore-add').onclick();assert.deepEqual(ui.state().rightRoute,[5,4]);assert.equal(ui.state().strikes,0);
+});
+
+test('Shortest Chain uses a real teammate season when browsing a different career year, while Snake keeps exact seasons',()=>{
+ const d={...graph,groups:[['A',20102011,[1,2]],['B',20112012,[2,3]],['C',20132014,[3,4]],['D',20122013,[2,5]]]};
+ const ui=app();ui.configure(d,'shortest');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:2,team:'B',year:20112012});ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===2).onclick();ui.element('explore-add').onclick();assert.deepEqual(ui.state().route,[1,2]);assert.equal(ui.state().strikes,0);
+ ui.configure(d,'career');ui.beginFree(1,4);ui.add(2,['B',20112012]);assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().strikes,1);ui.add(2,['A',20102011]);assert.deepEqual(ui.state().route,[1,2]);
 });

@@ -32,7 +32,7 @@ const currentPlayer=()=>activeChain().at(-1);
 const oppositePlayer=()=>!longest()&&buildSide==='end'?route.at(-1):longest()?end:rightRoute.at(-1);
 const usedPlayers=()=>longest()||finished?route:[...route,...rightRoute];
 function currentShortestScore(){return shortestShots(route,end)+(finished&&!lost?0:Math.max(0,rightRoute.length-1));}
-function selectBuildSide(side){if(longest()||finished||solving)return;buildSide=side==='end'?'end':'start';$('player-search').value='';$('player-results').replaceChildren();save();render();if($('explorer').open)renderExplorer();}
+function selectBuildSide(side){if(longest()||finished||solving)return;buildSide=side==='end'?'end':'start';$('player-search').value='';$('player-results').replaceChildren();save();render();if($('explorer').open){const view=exploreStack.at(-1);if(view)view.buildSide=buildSide;renderExplorer();}}
 
 function eligibility(id,connection=null){
  if(finished||solving)return {allowed:false,reason:solving?'Finding a route…':'Game complete'};
@@ -40,7 +40,9 @@ function eligibility(id,connection=null){
  const opposite=oppositePlayer();
  if(id!==start&&id!==end&&!matchesPosition(data.players[id],gamePosition))return {allowed:false,reason:'This challenge requires '+positionNames[gamePosition]};
  if(usedPlayers().includes(id)&&id!==opposite)return {allowed:false,reason:'Already used'};
- return canAddPlayer(engine,activeChain(),opposite,id,{finished,connection});
+ // Shortest Chain permits every season: prefer the browsed proof, but do not reject a teammate from another year.
+ const matchingSeason=connection&&engine.evidence(currentPlayer(),id).some(group=>group[0]===connection[0]&&group[1]===connection[1]);
+ return canAddPlayer(engine,activeChain(),opposite,id,{finished,connection:matchingSeason?connection:null});
 }
 function solve(type,request){if(!worker){worker=new Worker(new URL('./solver-worker.js',import.meta.url),{type:'module'});worker.postMessage({type:'init',data});worker.onmessage=e=>{const pending=workerRequests.get(e.data.id);if(!pending)return;workerRequests.delete(e.data.id);if(e.data.error)pending.reject(Error(e.data.error));else pending.resolve(e.data.result)};worker.onerror=()=>{for(const pending of workerRequests.values())pending.reject(Error('The route search could not finish. Please try again.'));workerRequests.clear();worker.terminate();worker=null}}const id=++workerId;return new Promise((resolve,reject)=>{workerRequests.set(id,{resolve,reject});worker.postMessage({id,type,...request})})}
 function renderSettings(){$('era-title').textContent=gameStyle==='shortest'?'Which player eras?':'Which connection decades?';$('era-description').textContent=gameStyle==='shortest'?'Choose the eras for your starting and destination players. Connections, player search during play, and roster exploration can use every NHL season.':'Only connections from seasons starting in your selected decades count. Choose one or combine several.';$('snake-description').hidden=!snakeStyles.includes(gameStyle);$('snake-description').textContent=snakeRules[gameStyle]||'';$('position-settings').hidden=gameStyle!=='shortest';$('random-description').textContent=gameStyle==='career'?'Random games pair an earlier rookie season with a later final recorded season, with a verified route between them.':snakeStyles.includes(gameStyle)?'Random games favor players with many connections. Each generated matchup has a verified finish.':'Random games balance available 1–4-shot lengths and prefer fewer shortest answers. Unavailable lengths are skipped.'}
@@ -380,15 +382,32 @@ function gapArrow(double=true){
  }
  return svg;
 }
-function browseExplorerPlayer(id,connection){$('explore-feedback').hidden=true;visitExplorer({kind:'player',id,connection});}
+function explorerSideFor(id){
+ if(longest())return 'start';
+ if(id==null)return buildSide;
+ if(id===start||id===route.at(-1))return 'start';
+ if(id===end||id===rightRoute.at(-1))return 'end';
+ return buildSide;
+}
+function prepareExplorerView(view,side){
+ const next={...view,buildSide:view.buildSide??side};
+ if(next.kind==='roster')next.playerId??=next.buildSide==='end'?rightRoute.at(-1):route.at(-1);
+ return next;
+}
+function restoreExplorerSide(view){
+ if(longest()||finished||solving||!view?.buildSide||view.buildSide===buildSide)return;
+ buildSide=view.buildSide;save();render();
+}
+function browseExplorerPlayer(id,connection){$('explore-feedback').hidden=true;visitExplorer({kind:'player',id,connection,buildSide:exploreStack.at(-1)?.buildSide??buildSide});}
 function addExplorerPlayer(){
  const view=exploreStack.at(-1);if(view?.kind!=='player')return;
+ restoreExplorerSide(view);
  if(!canAttemptPlayer(view.id))return;
- rememberExplorerPosition();const previous=currentPlayer(),result=add(view.id,view.connection);if(result?.then){return result.then(()=>{if(!finished&&currentPlayer()!==previous){exploreStack=[{kind:'player',id:currentPlayer()}];renderExplorer();restoreExplorerPosition();}})}
- if(!finished&&currentPlayer()!==previous){exploreStack=[{kind:'player',id:currentPlayer()}];renderExplorer();restoreExplorerPosition();}
+ rememberExplorerPosition();const previous=currentPlayer(),result=add(view.id,view.connection);if(result?.then){return result.then(()=>{if(!finished&&currentPlayer()!==previous){exploreStack=[prepareExplorerView({kind:'player',id:currentPlayer()},buildSide)];renderExplorer();restoreExplorerPosition();}})}
+ if(!finished&&currentPlayer()!==previous){exploreStack=[prepareExplorerView({kind:'player',id:currentPlayer()},buildSide)];renderExplorer();restoreExplorerPosition();}
 }
 function undoExplorerLink(){
- $('undo').onclick();exploreStack=[{kind:'player',id:currentPlayer()}];renderExplorer();restoreExplorerPosition();
+ $('undo').onclick();exploreStack=[prepareExplorerView({kind:'player',id:currentPlayer()},buildSide)];renderExplorer();restoreExplorerPosition();
 }
 function renderExplorerChain(view){
  const strip=$('explore-chain');strip.replaceChildren();
@@ -397,7 +416,7 @@ function renderExplorerChain(view){
   const id=players[i],item=document.createElement('div'),button=document.createElement('button'),caption=document.createElement('span');
   item.className='explore-chain-player';item.dataset.playerId=id;
   button.type='button';button.className='explore-chain-head'+(id===active?' selected-origin':'');button.setAttribute('aria-label','Explore '+name(id));button.setAttribute('aria-pressed',String(id===active));button.append(chainPortrait(id,endpointLinkedTeam(id,i,players,pending)));caption.textContent=name(id)+(longest()&&gameStyle==='career'&&(id===start||id===end)?' '+season(id===start?snakeContext().bounds.first:snakeContext().bounds.last):'');button.append(caption);
-  button.onclick=()=>{const side=id===start||id===route.at(-1)?'start':id===end||id===rightRoute.at(-1)?'end':buildSide;buildSide=side;visitExplorer({kind:'player',id});};item.append(button);strip.append(item);
+  button.onclick=()=>visitExplorer({kind:'player',id,buildSide:explorerSideFor(id)});item.append(button);strip.append(item);
   if(i<players.length-1){
    const link=document.createElement('div'),gap=pending&&i===route.length-1;link.className='explore-chain-link';
    if(gap){link.className+=' unconnected';link.append(gapArrow(!longest()))}else{
@@ -411,7 +430,7 @@ function renderExplorerChain(view){
  $('explore-target').hidden=longest();$('explore-target').textContent=longest()?'':`Shortest possible route: ${shotLabel(optimal)}${mode==='free'&&shortestOnly?' · Shortest route only':''}`;
 }
 function closeExplorer(){rememberExplorerPosition();exploreStack=[];if($('explorer').open)$('explorer').close();}
-function explorerViewKey(view){return view.kind==='roster'?JSON.stringify(['roster',view.team,view.year,view.query||'']):JSON.stringify(['player',view.id]);}
+function explorerViewKey(view){return view.kind==='roster'?JSON.stringify(['roster',view.buildSide??buildSide,view.playerId,view.team,view.year,view.query||'']):JSON.stringify(['player',view.buildSide??buildSide,view.id]);}
 function rememberExplorerPosition(){const view=exploreStack.at(-1);if(view&&$('explorer').open)explorePositions.set(explorerViewKey(view),$('explorer').scrollTop||0);}
 function restoreExplorerPosition(){
  const view=exploreStack.at(-1);if(!view)return;
@@ -419,11 +438,19 @@ function restoreExplorerPosition(){
  $('explorer').scrollTop=top;
  requestAnimationFrame(()=>{if($('explorer').open&&exploreStack.at(-1)===view)$('explorer').scrollTop=top;});
 }
-function openExplorer(view){if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;rememberExplorerPosition();if(!longest()&&!finished){const id=view.kind==='player'?view.id:view.playerId;if(id===start||id===route.at(-1))selectBuildSide('start');else if(id===end||id===rightRoute.at(-1))selectBuildSide('end');}if(view.kind==='roster')view={...view,playerId:view.playerId??currentPlayer()};exploreStack=[view];renderExplorer();if(!$('explorer').open){$('explorer').showModal();$('close-explorer').focus({preventScroll:true});}restoreExplorerPosition();}
-function visitExplorer(view){if(view.kind==='roster'&&!seasonExploreAllowed(view.year))return;rememberExplorerPosition();if(view.kind==='roster')view={...view,playerId:view.playerId??currentPlayer()};exploreStack.push(view);renderExplorer();restoreExplorerPosition();}
+function openExplorer(view){
+ if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;
+ rememberExplorerPosition();const id=view.kind==='player'?view.id:view.playerId;
+ exploreStack=[prepareExplorerView(view,explorerSideFor(id))];renderExplorer();
+ if(!$('explorer').open){$('explorer').showModal();$('close-explorer').focus({preventScroll:true});}restoreExplorerPosition();
+}
+function visitExplorer(view){
+ if(view.kind==='roster'&&!seasonExploreAllowed(view.year))return;
+ rememberExplorerPosition();exploreStack.push(prepareExplorerView(view,exploreStack.at(-1)?.buildSide??buildSide));renderExplorer();restoreExplorerPosition();
+}
 function rosterNavigation(view){
  const playerId=view.playerId??currentPlayer();
- const rosters=historyFor(playerId).flatMap(record=>record.allowed.map(year=>({kind:'roster',playerId,team:record.team,year,query:''}))).sort((a,b)=>a.year-b.year||a.team.localeCompare(b.team));
+ const rosters=historyFor(playerId).flatMap(record=>record.allowed.map(year=>({kind:'roster',playerId,team:record.team,year,query:'',buildSide:view.buildSide}))).sort((a,b)=>a.year-b.year||a.team.localeCompare(b.team));
  const index=rosters.findIndex(item=>item.team===view.team&&item.year===view.year);
  return {playerId,rosters,index};
 }
@@ -433,7 +460,7 @@ function changeExplorerSeason(direction){
  rememberExplorerPosition();exploreStack[exploreStack.length-1]=next;renderExplorer();restoreExplorerPosition();
 }
 function renderExplorer(){
- const view=exploreStack.at(-1);if(!view)return;
+ const view=exploreStack.at(-1);if(!view)return;restoreExplorerSide(view);
  const bounds=longest()&&gameStyle==='career'?snakeContext().bounds:null;
 
  renderExplorerChain(view);
