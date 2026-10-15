@@ -46,7 +46,9 @@ function solve(type,request){if(!worker){worker=new Worker(new URL('./solver-wor
 function renderSettings(){$('era-title').textContent=gameStyle==='shortest'?'Which player eras?':'Which connection decades?';$('era-description').textContent=gameStyle==='shortest'?'Choose the eras for your starting and destination players. Connections, player search during play, and roster exploration can use every NHL season.':'Only connections from seasons starting in your selected decades count. Choose one or combine several.';$('snake-description').hidden=!snakeStyles.includes(gameStyle);$('snake-description').textContent=snakeRules[gameStyle]||'';$('position-settings').hidden=gameStyle!=='shortest';$('random-description').textContent=gameStyle==='career'?'Random games pair an earlier rookie season with a later final recorded season, with a verified route between them.':snakeStyles.includes(gameStyle)?'Random games favor players with many connections. Each generated matchup has a verified finish.':'Random games balance available 1–4-shot lengths and prefer fewer shortest answers. Unavailable lengths are skipped.'}
 let difficulty=read('line-change-difficulty','easy');
 if(!['easy','medium','hard'].includes(difficulty))difficulty='easy';
-const key=()=>`line-change-v1:${data.version}:${date}:${puzzleFor(data,date).slice(0,2).join('-')}`;
+// Reopen this test daily after the scoring-rule change; other dates keep their saved attempts.
+const dailyAttemptResets={'2026-10-14':1};
+const key=()=>`line-change-v1:${data.version}:${date}:${puzzleFor(data,date).slice(0,2).join('-')}${dailyAttemptResets[date]?':attempt-'+dailyAttemptResets[date]:''}`;
 function read(k,fallback){try{return JSON.parse(localStorage.getItem(k))??fallback}catch{return fallback}}
 function write(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{status('Your browser cannot save progress. You can still play.')}}
 function status(s,error=false){$('status').textContent=s;$('status').classList.toggle('error',error);if($('explorer').open){$('explore-feedback').hidden=!error;$('explore-feedback').textContent=error?s:''}}

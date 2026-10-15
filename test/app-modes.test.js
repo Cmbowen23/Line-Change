@@ -26,7 +26,7 @@ class Element{
  focus(){}
  select(){}
 }
-function app({strict=false}={}){
+function app({strict=false,day=null}={}){
  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8'),elements=new Map([...html.matchAll(/id="([^"]+)"/g)].map(x=>[x[1],new Element()]));
  const document={getElementById:id=>{const found=elements.get(id)||[...elements.values()].flatMap(x=>x.querySelectorAll('*')).find(x=>x.id===id);if(!found&&id==='explore-roster')return null;assert.ok(found,'Missing HTML element '+id);return found},createElement:tag=>new Element(tag),createElementNS:(ns,tag)=>new Element(tag),createTextNode:text=>text,addEventListener(){}};
  const storage=new Map([['line-change-explore','false'],['line-change-daily-explore','false'],...(!strict?[['line-change-shortest-only','false']]:[])]),location={href:'https://example.com/',origin:'https://example.com'},localStorage={getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)};
@@ -35,9 +35,9 @@ function app({strict=false}={}){
   terminate(){}
  }
  const timers=[];
- const bindings={timers,...core,...challenges,...presentation,...explore,...modes,createSnake,document,localStorage,location,history:{replaceState(){}},Worker,URL,confirm:()=>true,navigator:{},setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout(){},requestAnimationFrame:fn=>fn(),portrait:()=>new Element('span'),teamLogo:()=>new Element('span')};
+ const bindings={timers,...core,easternDate:()=>day||core.easternDate(),...challenges,...presentation,...explore,...modes,createSnake,document,localStorage,location,history:{replaceState(){}},Worker,URL,confirm:()=>true,navigator:{},setTimeout:fn=>{timers.push(fn);return timers.length},clearTimeout(){},requestAnimationFrame:fn=>fn(),portrait:()=>new Element('span'),teamLogo:()=>new Element('span')};
  const source=readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace(/import\.meta\.url/g,"'https://example.com/app.js'").replace(/load\(\);document\.addEventListener\('visibilitychange',[\s\S]*$/,'');
- const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},seedDaily(record){write(key(),record)},setupFree,beginFree,add,daily,selectBuildSide,openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],rightRoute:[...rightRoute],buildSide,score:currentShortestScore(),links:[...routeLinks],finished,lost,gamePosition,strikes}},element:id=>$(id)};`)(...Object.values(bindings));return api;
+ const api=new Function(...Object.keys(bindings),source+`;return {selectDecades(ds){selectedDecades=ds;changeDecades()},flushTimers(){while(timers.length)timers.shift()()},seedDaily(record){write(key(),record)},seedPreviousDaily(record){write('line-change-v1:'+data.version+':'+date+':'+puzzleFor(data,date).slice(0,2).join('-'),record)},setupFree,beginFree,add,daily,selectBuildSide,openExplorer,fillTeamDetails,seasonExploreAllowed,configure(d,style,restriction='any'){data=d;gameStyle=style;selectedDecades=[2010];position=restriction;mode='free'},state(){return {route:[...route],rightRoute:[...rightRoute],buildSide,score:currentShortestScore(),links:[...routeLinks],finished,lost,gamePosition,strikes}},element:id=>$(id)};`)(...Object.values(bindings));return api;
 }
 const graph={version:'test',teams:{A:'Team A',B:'Team B',C:'Team C',D:'Team D'},puzzles:[[1,4,3]],players:{1:['Start','C',20102011,20102011],2:['Bridge','D',20102011,20122013],3:['Next','G',20122013,20132014],4:['End','C',20132014,20132014],5:['Trap','D',20102011,20142015],6:['Other','R',20142015,20142015]},groups:[['A',20102011,[1,2,5]],['B',20122013,[2,3]],['C',20132014,[3,4]],['D',20142015,[5,6]]]};
 test('Roster browsing sorts and mutes excluded positions without allowing invalid previews',()=>{
@@ -321,4 +321,10 @@ test('Daily charges only absent teammate connections, accepts traps, and does no
  const d={...graph,groups:[['A',20102011,[1,5]],['X',20102011,[1,2]],...graph.groups.slice(1)]};
  const ui=app({strict:true});ui.configure(d,'shortest');ui.daily();ui.add(5);assert.deepEqual(ui.state().route,[1,5]);assert.equal(ui.state().strikes,0);ui.element('undo').onclick();assert.deepEqual(ui.state().route,[1]);
  ui.add(2,['X',19901991]);assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().strikes,0);ui.add(1);assert.equal(ui.state().strikes,0);ui.add(6);assert.equal(ui.state().strikes,1);assert.deepEqual(ui.state().route,[1]);ui.add(2);ui.add(3);assert.equal(ui.state().finished,true);assert.equal(ui.state().strikes,1);
+});
+
+test('October 14 daily reset ignores the prior attempt, keeps the matchup, and saves the fresh attempt normally',()=>{
+ const record={route:[1],rightRoute:[4],strikes:3,finished:true,lost:true};
+ const ui=app({day:'2026-10-14'});ui.configure(graph,'shortest');ui.daily();ui.seedPreviousDaily(record);ui.daily();assert.deepEqual(ui.state().route,[1]);assert.deepEqual(ui.state().rightRoute,[4]);assert.equal(ui.state().strikes,0);assert.equal(ui.state().finished,false);ui.add(6);ui.daily();assert.equal(ui.state().strikes,1);assert.equal(ui.state().finished,false);
+ const nextDay=app({day:'2026-10-15'});nextDay.configure(graph,'shortest');nextDay.daily();nextDay.seedPreviousDaily(record);nextDay.daily();assert.equal(nextDay.state().strikes,3);assert.equal(nextDay.state().finished,true);
 });
