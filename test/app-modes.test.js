@@ -219,7 +219,7 @@ test('Roster arrows follow the explored career across seasons and trades, preser
  ui.element('explore-next-season').onclick();assert.match(ui.element('explore-title').textContent,/Team C/);ui.element('explore-next-season').onclick();assert.match(ui.element('explore-title').textContent,/Team D/);assert.equal(ui.element('explore-next-season').disabled,true);
  ui.element('explore-next-season').onclick();assert.match(ui.element('explore-title').textContent,/Team D/);
  for(let i=0;i<3;i++)ui.element('explore-prev-season').onclick();assert.match(ui.element('explore-title').textContent,/Team A/);assert.equal(ui.element('explorer').scrollTop,340);assert.deepEqual(ui.state().route,[1]);
- ui.openExplorer({kind:'player',id:2});assert.equal(ui.element('explore-prev-season').hidden,true);
+ ui.openExplorer({kind:'player',id:2});assert.match(ui.element('explore-title').textContent,/Team A/);ui.element('explore-back').onclick();assert.equal(ui.element('explore-prev-season').hidden,true);
  const seasons=ui.element('explore-content').children.find(x=>x.className==='explore-seasons');seasons.children.find(x=>x.tagName==='button').onclick();assert.match(ui.element('explore-season-context').textContent,/1 of 4/);
  ui.element('explore-next-season').onclick();ui.element('explore-back').onclick();assert.equal(ui.element('explore-title').textContent,d.players[2][0]);
  ui.configure(d,'career');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:2,team:'A',year:20102011,query:''});assert.equal(ui.element('explore-next-season').disabled,true);
@@ -343,4 +343,29 @@ test('Shortest Chain uses a real teammate season when browsing a different caree
  const d={...graph,groups:[['A',20102011,[1,2]],['B',20112012,[2,3]],['C',20132014,[3,4]],['D',20122013,[2,5]]]};
  const ui=app();ui.configure(d,'shortest');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:2,team:'B',year:20112012});ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.dataset.playerId===2).onclick();ui.element('explore-add').onclick();assert.deepEqual(ui.state().route,[1,2]);assert.equal(ui.state().strikes,0);
  ui.configure(d,'career');ui.beginFree(1,4);ui.add(2,['B',20112012]);assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().strikes,1);ui.add(2,['A',20102011]);assert.deepEqual(ui.state().route,[1,2]);
+});
+
+test('Switching endpoints preserves each open season, roster search, scroll, and build origin',()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,4);
+ const switchTo=id=>ui.element('explore-chain').children.find(x=>x.dataset.playerId===id).children[0].onclick();
+ ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});
+ ui.element('roster-search').value='Bridge';ui.element('roster-search').oninput();ui.element('explorer').scrollTop=410;
+ switchTo(4);assert.equal(ui.state().buildSide,'end');assert.equal(ui.element('explore-title').textContent,'End');
+ ui.element('explore-content').querySelectorAll('*').find(x=>x.tagName==='button'&&x.textContent==='2013–14').onclick();
+ ui.element('roster-search').value='Next';ui.element('roster-search').oninput();ui.element('explorer').scrollTop=275;
+ switchTo(1);assert.match(ui.element('explore-title').textContent,/Team A/);assert.equal(ui.element('roster-search').value,'Bridge');assert.equal(ui.element('explorer').scrollTop,410);assert.equal(ui.state().buildSide,'start');
+ switchTo(4);assert.match(ui.element('explore-title').textContent,/Team C/);assert.equal(ui.element('roster-search').value,'Next');assert.equal(ui.element('explorer').scrollTop,275);assert.equal(ui.state().buildSide,'end');
+ ui.element('close-explorer').onclick();ui.openExplorer({kind:'player',id:1});assert.match(ui.element('explore-title').textContent,/Team A/);assert.equal(ui.element('roster-search').value,'Bridge');
+ assert.equal(ui.state().score,0);assert.equal(ui.state().strikes,0);
+ ui.beginFree(1,4);ui.openExplorer({kind:'player',id:1});assert.equal(ui.element('explore-title').textContent,'Start');
+});
+
+test('Both main-chain team histories remain expanded when switching explored endpoints',()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,4);
+ const histories=()=>ui.element('chain').querySelectorAll('*').filter(x=>x.className==='endpoint-teams chain-teams');
+ for(const details of histories()){details.open=true;details.listeners.toggle()}
+ ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});
+ ui.element('explore-chain').children.find(x=>x.dataset.playerId===4).children[0].onclick();
+ ui.element('explore-chain').children.find(x=>x.dataset.playerId===1).children[0].onclick();
+ assert.ok(histories().every(x=>x.open));
 });

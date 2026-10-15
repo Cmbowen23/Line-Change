@@ -13,6 +13,7 @@ let lookupRequest=0;
 let rightRoute=[],buildSide='start',shortHistory=[];
 let exploreStack=[];
 const explorePositions=new Map();
+const exploreSeasons=new Map();
 const canExplore=()=>true;
 const activeDecades=()=>mode==='daily'||gameStyle==='shortest'?allDecades:selectedDecades;
 let gameStyle=read('line-change-style','shortest');if(gameStyle==='longest')gameStyle='open';if(!['shortest',...snakeStyles].includes(gameStyle))gameStyle='shortest';
@@ -137,6 +138,7 @@ function add(p,connection=null){
 }
 function commitConnection(p,verdict){
  const previous=currentPlayer();
+ exploreSeasons.clear();
  if(longest()){routeLinks.push(verdict.evidence.slice(0,2));route=appendConnection(engine,route,p,end,true)}else{
   const opposite=oppositePlayer();
   if(p!==opposite){activeChain().push(p);shortHistory.push(buildSide)}
@@ -248,7 +250,7 @@ function appendAllAnswers(parent,lookup=null){
  },0);
 }
 async function share(){const text=`🏒 LINE CHANGE${mode==='daily'?` · ${date}`:' · FREE PLAY'}\n${name(start)} → ${name(end)}\n${'🟩'.repeat(Math.min(longest()?route.length-1:currentShortestScore(),12))}\n${longest()?snakeScore(gameStyle,routeLinks).value+' '+snakeScore(gameStyle,routeLinks).unit:shotLabel(currentShortestScore())+' · Shortest route '+shotLabel(optimal)+(mode==='daily'?' · '+dailyStars(currentShortestScore(),optimal,revealed)+' stars':'')}${longest()?' · '+styleNames[gameStyle]:gamePosition!=='any'?' · '+positionNames[gamePosition]:''} · ${hintsUsed} hints${mode==='daily'?`\n🔥 ${$('streak').textContent} day streak`:''}\n${mode==='free'?gameURL():location.origin}`;try{if(navigator.share)await navigator.share({text});else{await navigator.clipboard.writeText(text);status('Result copied. Share it with your locker room.')}}catch(e){if(e.name!=='AbortError'){status('Copy your result below.');const box=document.createElement('textarea');box.value=text;box.rows=6;box.style.width='100%';$('result').append(box);box.focus();box.select()}}}
-function daily(){if(!data)return;longTarget=null;lookupRequest++;revision++;snake=null;gamePosition='any';lost=solving=false;closeExplorer();closeCompletion();clearChallengeURL();mode='daily';engine=createEngine(data);date=easternDate();$('daily').classList.add('active');$('free').classList.remove('active');$('setup').hidden=true;$('board').hidden=false;const dailyLevel=dailyDifficultyFor(data,date);$('date').textContent=`DAILY · ${date}${dailyLevel?' · '+dailyLevel.label.toUpperCase():''}`;[start,end,optimal]=puzzleFor(data,date);[start,end]=orderMatchup(data,start,end);optimal=minimumShots(optimal);const stored=read(key(),null);route=[start];rightRoute=[end];buildSide='start';shortHistory=[];routeLinks=[];finished=false;revealed=false;hintsUsed=0;strikes=0;hintedPlayers=new Set();
+function daily(){if(!data)return;longTarget=null;lookupRequest++;revision++;snake=null;gamePosition='any';lost=solving=false;closeExplorer();exploreSeasons.clear();explorePositions.clear();closeCompletion();clearChallengeURL();mode='daily';engine=createEngine(data);date=easternDate();$('daily').classList.add('active');$('free').classList.remove('active');$('setup').hidden=true;$('board').hidden=false;const dailyLevel=dailyDifficultyFor(data,date);$('date').textContent=`DAILY · ${date}${dailyLevel?' · '+dailyLevel.label.toUpperCase():''}`;[start,end,optimal]=puzzleFor(data,date);[start,end]=orderMatchup(data,start,end);optimal=minimumShots(optimal);const stored=read(key(),null);route=[start];rightRoute=[end];buildSide='start';shortHistory=[];routeLinks=[];finished=false;revealed=false;hintsUsed=0;strikes=0;hintedPlayers=new Set();
  if(stored?.finished&&Array.isArray(stored.route)&&stored.route[0]===end&&stored.route.at(-1)===start)stored.route=[...stored.route].reverse();
  if(stored&&Array.isArray(stored.route)&&stored.route[0]===start&&stored.route.every((p,i)=>data.players[p]&&(!i||engine.evidence(stored.route[i-1],p).length))){route=stored.route;hintsUsed=Number.isInteger(stored.hintsUsed)&&stored.hintsUsed>=0?stored.hintsUsed:0;hintedPlayers=new Set(stored.hintedPlayers||[]);revealed=stored.revealed===true;finished=(stored.finished===true&&route.at(-1)===end);if(revealed&&!finished){route=[start];revealed=false}}
  if(!finished&&Array.isArray(stored?.rightRoute)&&stored.rightRoute[0]===end&&stored.rightRoute.every((id,i)=>data.players[id]&&!route.includes(id)&&(id===end||matchesPosition(data.players[id],gamePosition))&&(!i||engine.evidence(stored.rightRoute[i-1],id).length)))rightRoute=stored.rightRoute;
@@ -304,7 +306,7 @@ $('lookup-submit').onclick=async()=>{
 };
 function beginFree(a,b,restriction=null){
  [a,b]=orderMatchup(data,a,b);
- closeExplorer();closeCompletion();revision++;solving=lost=false;
+ closeExplorer();exploreSeasons.clear();explorePositions.clear();closeCompletion();revision++;solving=lost=false;
  gamePosition=snakeStyles.includes(gameStyle)?'any':restriction??(position==='random'?'any':position);
  if(gameStyle==='shortest'){const eligible=new Set(playersFromEras(data,selectedDecades));if(!eligible.has(a)||!eligible.has(b)){$('setup-status').textContent='Choose starting and destination players who appeared in your selected eras.';return false}}
  engine=createEngine(data,gameStyle==='shortest'?allDecades:selectedDecades,{position:gamePosition,start:a,end:b});snake=snakeStyles.includes(gameStyle)?createSnake(data,selectedDecades,gameStyle):null;
@@ -397,6 +399,10 @@ function prepareExplorerView(view,side){
  if(next.kind==='roster')next.playerId??=next.buildSide==='end'?rightRoute.at(-1):route.at(-1);
  return next;
 }
+function rememberedExplorerPlayer(id){
+ const side=explorerSideFor(id),saved=exploreSeasons.get(`${side}:${id}`);
+ return saved?{...saved}:{kind:'player',id,buildSide:side};
+}
 function restoreExplorerSide(view){
  if(longest()||finished||solving||!view?.buildSide||view.buildSide===buildSide)return;
  buildSide=view.buildSide;save();render();
@@ -410,7 +416,7 @@ function addExplorerPlayer(){
  if(!finished&&currentPlayer()!==previous){exploreStack=[prepareExplorerView({kind:'player',id:currentPlayer()},buildSide)];renderExplorer();restoreExplorerPosition();}
 }
 function undoExplorerLink(){
- $('undo').onclick();exploreStack=[prepareExplorerView({kind:'player',id:currentPlayer()},buildSide)];renderExplorer();restoreExplorerPosition();
+ $('undo').onclick();exploreSeasons.clear();exploreStack=[prepareExplorerView({kind:'player',id:currentPlayer()},buildSide)];renderExplorer();restoreExplorerPosition();
 }
 function renderExplorerChain(view){
  const strip=$('explore-chain');strip.replaceChildren();
@@ -419,7 +425,7 @@ function renderExplorerChain(view){
   const id=players[i],item=document.createElement('div'),button=document.createElement('button'),caption=document.createElement('span');
   item.className='explore-chain-player';item.dataset.playerId=id;
   button.type='button';button.className='explore-chain-head'+(id===active?' selected-origin':'');button.setAttribute('aria-label','Explore '+name(id));button.setAttribute('aria-pressed',String(id===active));button.append(chainPortrait(id,endpointLinkedTeam(id,i,players,pending)));caption.textContent=name(id)+(longest()&&gameStyle==='career'&&(id===start||id===end)?' '+season(id===start?snakeContext().bounds.first:snakeContext().bounds.last):'');button.append(caption);
-  button.onclick=()=>visitExplorer({kind:'player',id,buildSide:explorerSideFor(id)});item.append(button);strip.append(item);
+  button.onclick=()=>{rememberExplorerPosition();visitExplorer(rememberedExplorerPlayer(id));};item.append(button);strip.append(item);
   if(i<players.length-1){
    const link=document.createElement('div'),gap=pending&&i===route.length-1;link.className='explore-chain-link';
    if(gap){link.className+=' unconnected';link.append(gapArrow(!longest()))}else{
@@ -434,7 +440,7 @@ function renderExplorerChain(view){
 }
 function closeExplorer(){rememberExplorerPosition();exploreStack=[];if($('explorer').open)$('explorer').close();}
 function explorerViewKey(view){return view.kind==='roster'?JSON.stringify(['roster',view.buildSide??buildSide,view.playerId,view.team,view.year,view.query||'']):JSON.stringify(['player',view.buildSide??buildSide,view.id]);}
-function rememberExplorerPosition(){const view=exploreStack.at(-1);if(view&&$('explorer').open)explorePositions.set(explorerViewKey(view),$('explorer').scrollTop||0);}
+function rememberExplorerPosition(){const view=exploreStack.at(-1);if(view&&$('explorer').open){explorePositions.set(explorerViewKey(view),$('explorer').scrollTop||0);if(view.kind==='roster')exploreSeasons.set(`${view.buildSide}:${view.playerId}`,{...view});}}
 function restoreExplorerPosition(){
  const view=exploreStack.at(-1);if(!view)return;
  const top=explorePositions.get(explorerViewKey(view))||0;
@@ -444,7 +450,8 @@ function restoreExplorerPosition(){
 function openExplorer(view){
  if(!canExplore()||(view.kind==='roster'&&!seasonExploreAllowed(view.year)))return;
  rememberExplorerPosition();const id=view.kind==='player'?view.id:view.playerId;
- exploreStack=[prepareExplorerView(view,explorerSideFor(id))];renderExplorer();
+ const root=prepareExplorerView(view,explorerSideFor(id)),saved=view.kind==='player'?rememberedExplorerPlayer(id):null;
+ exploreStack=saved?.kind==='roster'?[root,saved]:[root];renderExplorer();
  if(!$('explorer').open){$('explorer').showModal();$('close-explorer').focus({preventScroll:true});}restoreExplorerPosition();
 }
 function visitExplorer(view){
@@ -527,4 +534,3 @@ $('intro-rules').addEventListener('close',acknowledgeIntro);
 $('help').onclick=()=>$('rules').showModal();$('close-help').onclick=()=>$('rules').close();
 async function load(){try{const r=await fetch('data/hockey.json',{cache:'no-cache'});if(!r.ok)throw Error('HTTP '+r.status);data=await r.json();const schedule=await fetch('data/daily-puzzles.json',{cache:'no-cache'});if(!schedule.ok)throw Error('Puzzle schedule unavailable');data.dailySchedule=await schedule.json();const depth=await fetch('data/player-depth.json',{cache:'no-cache'});if(!depth.ok)throw Error('Player difficulty data unavailable');data.playerDepth=await depth.json();engine=createEngine(data);const shared=parseChallenge(location.href,data);if(shared){gameStyle=shared.style==='longest'?'open':shared.style||'shortest';selectedDecades=shared.decades;engine=createEngine(data,selectedDecades);if(!beginFree(shared.start,shared.end,shared.position||'any')){setupFree();$('setup-status').textContent='No route exists for this shared matchup. Choose new players or decades.'}showStreak()}else daily()}catch(e){if(data?.playerDepth){setupFree();$('setup-status').textContent=e.message;return}status('The hockey data couldn’t load. Check your connection and try again.',true);const b=document.createElement('button');b.textContent='Retry';b.onclick=()=>{b.remove();load()};$('status').after(b)}}
 load();document.addEventListener('visibilitychange',()=>{if(!document.hidden&&mode==='daily'&&data&&date!==easternDate())daily()});
-
