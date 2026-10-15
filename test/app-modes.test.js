@@ -298,7 +298,7 @@ test('Shortest Chain rejects a trap without consuming a shot, keeps Xs after und
  ui.add(2);ui.element('undo').onclick();assert.equal(ui.state().strikes,1);ui.add(2);ui.add(3);assert.equal(ui.state().finished,true);assert.equal(ui.state().lost,false);assert.equal(ui.state().score,2);
 });
 test('Three daily Xs persist across reload, earn no stars, and cannot accept more guesses',()=>{
- const d={...graph,groups:[['A',20102011,[1,5]],['X',20102011,[1,2]],...graph.groups.slice(1)]};const ui=app();ui.configure(d,'shortest');ui.daily();ui.add(5);ui.daily();assert.equal(ui.state().strikes,1);assert.equal(ui.state().finished,false);ui.add(5);ui.add(5);assert.equal(ui.state().lost,true);assert.deepEqual(ui.state().route,[1]);assert.match(ui.element('completion-stars')['aria-label'],/0 stars/);ui.daily();assert.equal(ui.state().strikes,3);assert.equal(ui.state().finished,true);ui.add(2);assert.deepEqual(ui.state().route,[1]);
+ const d={...graph,groups:[['A',20102011,[1,5]],['X',20102011,[1,2]],...graph.groups.slice(1)]};const ui=app();ui.configure(d,'shortest');ui.daily();ui.add(6);ui.daily();assert.equal(ui.state().strikes,1);assert.equal(ui.state().finished,false);ui.add(6);ui.add(6);assert.equal(ui.state().lost,true);assert.deepEqual(ui.state().route,[1]);assert.match(ui.element('completion-stars')['aria-label'],/0 stars/);ui.daily();assert.equal(ui.state().strikes,3);assert.equal(ui.state().finished,true);ui.add(2);assert.deepEqual(ui.state().route,[1]);
 });
 
 test('Shortest-route option defaults on, rejects completable detours from either endpoint, and can be disabled',()=>{
@@ -308,4 +308,17 @@ test('Shortest-route option defaults on, rejects completable detours from either
  ui.selectBuildSide('end');ui.add(7);assert.equal(ui.state().strikes,2);assert.deepEqual(ui.state().rightRoute,[4]);ui.add(3);ui.selectBuildSide('start');ui.add(2);assert.equal(ui.state().finished,true);assert.equal(ui.state().score,2);
  ui.beginFree(1,4);ui.element('shortest-only').checked=false;ui.element('shortest-only').onchange();ui.add(5);assert.equal(ui.state().strikes,0);assert.deepEqual(ui.state().route,[1,5]);ui.daily();assert.equal(ui.element('shortest-only').checked,false);
  ui.configure(d,'career');ui.beginFree(1,4);assert.equal(ui.element('shortest-only-setting').hidden,true);
+});
+
+test('Daily accepts longer teammate routes with strict preference on, while free-play still rejects detours',()=>{
+ const d={...graph,groups:[['A',20102011,[1,2]],['B',20122013,[2,3]],['C',20132014,[3,4]],['D',20102011,[1,5]],['E',20112012,[5,6]],['F',20122013,[6,3]]]};
+ const ui=app({strict:true});ui.configure(d,'shortest');ui.daily();assert.equal(ui.element('shortest-only-setting').hidden,true);ui.openExplorer({kind:'player',id:1});assert.doesNotMatch(ui.element('explore-target').textContent,/Shortest route only/);
+ ui.add(5);assert.deepEqual(ui.state().route,[1,5]);assert.equal(ui.state().strikes,0);ui.add(6);ui.add(3);assert.equal(ui.state().finished,true);assert.equal(ui.state().lost,false);assert.equal(ui.state().score,3);assert.equal(ui.state().strikes,0);assert.match(ui.element('completion-stars')['aria-label'],/2 stars/);
+ ui.beginFree(1,4);assert.equal(ui.element('shortest-only-setting').hidden,false);ui.add(5);assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().strikes,1);
+ const reverse=app({strict:true});reverse.configure(d,'shortest');reverse.daily();reverse.selectBuildSide('end');reverse.add(3);reverse.add(6);assert.deepEqual(reverse.state().rightRoute,[4,3,6]);assert.equal(reverse.state().strikes,0);
+});
+test('Daily charges only absent teammate connections, accepts traps, and does not penalize reused players or wrong season choices',()=>{
+ const d={...graph,groups:[['A',20102011,[1,5]],['X',20102011,[1,2]],...graph.groups.slice(1)]};
+ const ui=app({strict:true});ui.configure(d,'shortest');ui.daily();ui.add(5);assert.deepEqual(ui.state().route,[1,5]);assert.equal(ui.state().strikes,0);ui.element('undo').onclick();assert.deepEqual(ui.state().route,[1]);
+ ui.add(2,['X',19901991]);assert.deepEqual(ui.state().route,[1]);assert.equal(ui.state().strikes,0);ui.add(1);assert.equal(ui.state().strikes,0);ui.add(6);assert.equal(ui.state().strikes,1);assert.deepEqual(ui.state().route,[1]);ui.add(2);ui.add(3);assert.equal(ui.state().finished,true);assert.equal(ui.state().strikes,1);
 });

@@ -72,7 +72,7 @@ function renderStars(element,stars,label){
  for(let i=1;i<=3;i++){const star=document.createElement('span');star.textContent='★';star.className=i<=stars?'star earned':'star';star.setAttribute('aria-hidden','true');element.append(star)}
 }
 function renderStrikeMarks(element){element.replaceChildren();element.setAttribute('aria-label',`${strikes} of 3 Xs`);for(let i=0;i<3;i++){const mark=document.createElement('span');mark.textContent='×';mark.className=i<strikes?'strike earned':'strike';mark.setAttribute('aria-hidden','true');element.append(mark)}}
-function renderRoundScore(){renderStrikeMarks($('strike-count'));$('shortest-only-setting').hidden=longest();$('shortest-only').checked=shortestOnly;$('shortest-only').disabled=finished||solving;
+function renderRoundScore(){renderStrikeMarks($('strike-count'));$('shortest-only-setting').hidden=mode!=='free'||longest();$('shortest-only').checked=shortestOnly;$('shortest-only').disabled=finished||solving;
 
  const rule=activePositionRule();$('round-position-rule').hidden=!rule;$('round-position-rule').textContent=rule;
  const shots=currentShortestScore(),stars=dailyStars(shots,optimal,revealed||lost);
@@ -106,7 +106,12 @@ function rejectConnection(reason){
 }
 function add(p,connection=null){
  if(finished||solving)return;
- const verdict=eligibility(p,connection);if(!verdict.allowed){rejectConnection(verdict.reason);return}
+ const verdict=eligibility(p,connection);if(!verdict.allowed){
+  if(mode==='daily'&&engine.evidence(currentPlayer(),p).length){status(verdict.reason+'.',true);return}
+  rejectConnection(verdict.reason);return
+ }
+ // Daily accepts valid teammate detours. Only a missing teammate link costs an X.
+ if(mode==='daily'){commitConnection(p,verdict);return}
  if(longest()){
   const next={...snakeContext(),route:[...route,p],links:[...routeLinks,verdict.evidence.slice(0,2)]};
   const result=snake.finish(next,{maxStates:20000});
@@ -401,7 +406,7 @@ function renderExplorerChain(view){
   }
  }
  const rule=activePositionRule();$('explore-position-rule').hidden=!rule;$('explore-position-rule').textContent=rule;
- $('explore-target').hidden=longest();$('explore-target').textContent=longest()?'':`Shortest possible route: ${shotLabel(optimal)}${shortestOnly?' · Shortest route only':''}`;
+ $('explore-target').hidden=longest();$('explore-target').textContent=longest()?'':`Shortest possible route: ${shotLabel(optimal)}${mode==='free'&&shortestOnly?' · Shortest route only':''}`;
 }
 function closeExplorer(){rememberExplorerPosition();exploreStack=[];if($('explorer').open)$('explorer').close();}
 function explorerViewKey(view){return view.kind==='roster'?JSON.stringify(['roster',view.team,view.year,view.query||'']):JSON.stringify(['player',view.id]);}
