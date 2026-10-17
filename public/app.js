@@ -231,11 +231,12 @@ function renderRoute(target=$('chain'),path=route,links=routeLinks,lookupEngine=
   const id=players[i],position=positionFor(i),player=document.createElement('li'),caption=document.createElement('span'),role=document.createElement('span');
   player.className='route-player'+(!isLookup&&!longest()&&!finished&&id===currentPlayer()?' active-frontier':'');player.dataset.playerId=id;player.style.gridRow=position.row;player.style.gridColumn=position.column;caption.className='route-name';caption.textContent=name(id);
 
-  if(!isLookup&&canExplore()){const button=document.createElement('button');button.className='explore-player-button';button.type='button';button.setAttribute('aria-label','Explore '+name(id));button.append(chainPortrait(id,endpointLinkedTeam(id,i,players,pending,links,isLookup)),caption);button.onclick=()=>openExplorer({kind:'player',id});player.append(button)}else player.append(portrait(id,name(id)),caption);
+  const portraitSlot=document.createElement('span');portraitSlot.className='route-portrait-slot';portraitSlot.append(isLookup?portrait(id,name(id)):chainPortrait(id,endpointLinkedTeam(id,i,players,pending,links,isLookup)));
+  if(!isLookup&&canExplore()){const button=document.createElement('button');button.className='explore-player-button';button.type='button';button.setAttribute('aria-label','Explore '+name(id));button.append(portraitSlot,caption);button.onclick=()=>openExplorer({kind:'player',id});player.append(button)}else player.append(portraitSlot,caption);
   if(!isLookup&&canExplore()){const details=document.createElement('details');details.className='endpoint-teams chain-teams';details.dataset.playerId=id;details.open=openTeams.has(id);const summary=document.createElement('summary');summary.textContent='Teams & seasons';details.append(summary);const loadHistory=()=>{if(details.open&&details.dataset.loaded!=='true'){fillTeamDetails(details,id);details.dataset.loaded='true'}};details.addEventListener('toggle',loadHistory);loadHistory();player.append(details)}chain.append(player);
   if(i===players.length-1)continue;
   const next=positionFor(i+1),unconnected=pending&&i===route.length-1,link=document.createElement('li');
-  const vertical=next.row!==position.row;link.className='route-link '+(vertical?'route-down':next.column<position.column?'route-left':'route-right')+(unconnected?' route-pending'+(!longest()?' route-both':''):'');
+  const vertical=next.row!==position.row;link.className='route-link '+(vertical?'route-down'+(position.column===1?' route-turn-start':''):next.column<position.column?'route-left':'route-right')+(unconnected?' route-pending'+(!longest()?' route-both':''):'');
   link.style.gridRow=vertical?position.row+1:position.row;link.style.gridColumn=vertical?position.column:(position.column+next.column)/2;
   const line=document.createElement('span');line.className='route-line'+(unconnected&&!longest()?' route-gap-mark':'');line.setAttribute('aria-hidden','true');if(unconnected&&!longest())line.append(gapArrow());link.append(line);
   if(unconnected){link.setAttribute('aria-label','Destination not yet reached. Keep adding connections.');link.title='Keep adding connections to reach '+name(end)}else{
@@ -244,7 +245,7 @@ function renderRoute(target=$('chain'),path=route,links=routeLinks,lookupEngine=
    const logo=teamLogo(team,data.teams[team]||team),label=document.createElement('span');label.className='route-season';label.textContent=season(year);label.setAttribute('aria-hidden','true');link.append(logo,label);
   }
   if(detour&&((id===detour.from&&players[i+1]===detour.player)||(id===detour.player&&players[i+1]===detour.from))){
-   const marker=document.createElement('button');marker.type='button';marker.className='shorter-route-marker';marker.textContent='↗ Shorter route';marker.setAttribute('aria-label','Show better choices from '+name(detour.from));marker.onclick=()=>openShorterChoices(detour);link.className+=' has-shorter-route';link.append(marker);
+   const marker=document.createElement('button'),icon=document.createElementNS('http://www.w3.org/2000/svg','svg'),arrow=document.createElementNS('http://www.w3.org/2000/svg','path');marker.type='button';marker.className='shorter-route-marker';marker.title='Shorter route';marker.setAttribute('aria-label','Show better choices from '+name(detour.from));icon.setAttribute('viewBox','0 0 24 24');icon.setAttribute('aria-hidden','true');arrow.setAttribute('d','M6 18v-5a7 7 0 0 1 7-7h5m-5-4 5 4-5 4');icon.append(arrow);marker.append(icon);marker.onclick=()=>openShorterChoices(detour);link.className+=' has-shorter-route';link.append(marker);
   }
   chain.append(link);
  }

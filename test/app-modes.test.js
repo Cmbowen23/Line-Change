@@ -374,7 +374,8 @@ test('completed Daily marks the detour on the board and shows better player head
  const d={...graph,puzzles:[[1,8,3]],players:Object.fromEntries([1,2,3,4,5,8,9].map(id=>[id,['Player '+id,'C',20102011,20112012]])),groups:[[1,2],[2,3],[3,8],[2,9],[9,8],[2,4],[4,5],[5,8]].map((pair,i)=>['T'+i,20102011,pair])};
  const ui=app();ui.configure(d,'shortest');ui.daily();ui.add(2);ui.selectBuildSide('end');ui.add(5);ui.selectBuildSide('start');ui.add(4);
  assert.equal(ui.state().finished,true);assert.equal(ui.state().score,3);assert.doesNotMatch(ui.element('result').textContent,/Review my route|First detour|best possible total/);
- const markers=()=>ui.element('chain').querySelectorAll('*').filter(x=>x.className==='shorter-route-marker');assert.equal(markers().length,1);assert.match(markers()[0]['aria-label'],/Player 8/);
+ const markers=()=>ui.element('chain').querySelectorAll('*').filter(x=>x.className==='shorter-route-marker');assert.equal(markers().length,1);assert.match(markers()[0]['aria-label'],/Player 8/);assert.equal(markers()[0].textContent,'');assert.equal(markers()[0].children[0].tagName,'svg');
+ const heads=ui.element('chain').children.filter(x=>x.className?.includes('route-player'));assert.ok(heads.every(x=>x.querySelectorAll('*').some(node=>node.className==='route-portrait-slot')));
  const before=ui.state();markers()[0].onclick();assert.equal(ui.element('shorter-choices').open,true);assert.equal(ui.element('shorter-title').textContent,'2 shots · Better choices');
  assert.deepEqual(ui.element('shorter-players').children.map(x=>x.dataset.playerId),[3,9]);assert.equal(ui.element('shorter-preview').hidden,true);
  ui.element('shorter-players').children[0].onclick();assert.deepEqual(ui.element('shorter-preview').children.filter(x=>x.dataset.playerId).map(x=>x.dataset.playerId),[1,2,3,8]);assert.deepEqual(ui.state(),before);
