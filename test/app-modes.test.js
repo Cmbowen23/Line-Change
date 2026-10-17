@@ -369,3 +369,13 @@ test('Both main-chain team histories remain expanded when switching explored end
  ui.element('explore-chain').children.find(x=>x.dataset.playerId===1).children[0].onclick();
  assert.ok(histories().every(x=>x.open));
 });
+
+test('completed Daily route review explains a detour, preserves score, and survives reloading',()=>{
+ const d={...graph,puzzles:[[1,8,3]],players:Object.fromEntries([1,2,3,4,5,8].map(id=>[id,['Player '+id,'C',20102011,20112012]])),groups:[[1,2],[2,3],[3,8],[2,4],[4,5],[5,8]].map((pair,i)=>['T'+i,20102011,pair])};
+ const ui=app();ui.configure(d,'shortest');ui.daily();ui.add(2);ui.selectBuildSide('end');ui.add(5);ui.selectBuildSide('start');ui.add(4);
+ assert.equal(ui.state().finished,true);assert.equal(ui.state().score,3);assert.equal(ui.element('completion-review').hidden,false);
+ const before=ui.state();ui.element('completion-review').onclick();const section=ui.element('route-review');assert.equal(section.open,true);assert.match(section.textContent,/First detour.*Player 8 → Player 5/);assert.match(section.textContent,/original 2 shots target was no longer possible/);assert.deepEqual(ui.state(),before);
+ const alternative=section.children.find(x=>x.tagName==='ol'&&x.className?.includes('route-chain'));assert.deepEqual(alternative.children.filter(x=>x.dataset.playerId).map(x=>x.dataset.playerId),[1,2,3,8]);
+ ui.daily();const restored=ui.element('route-review');restored.open=true;restored.loadReview();assert.doesNotMatch(restored.textContent,/older attempt/);assert.match(restored.textContent,/First detour.*Player 8 → Player 5/);
+ ui.setupFree();ui.beginFree(1,8);ui.add(2);ui.add(3);assert.equal(ui.element('completion-review').hidden,true);
+});

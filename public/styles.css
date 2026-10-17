@@ -92,3 +92,5 @@ header{max-width:800px;padding:18px 24px}.brand{font-size:24px}main{max-width:80
 .strikes{display:flex;justify-content:center;gap:10px;margin:2px 0 10px;font-size:27px;line-height:1;font-weight:700}.strike{color:#c7ccc2}.strike.earned{color:var(--red)}#explore-feedback{text-align:center;color:var(--red)}
 
 .strict-setting{display:flex;align-items:center;justify-content:center;gap:8px;font-size:12px;margin:0 10px 10px;font-weight:600}.strict-setting input{width:16px;height:16px;margin:0;accent-color:var(--ink)}.strict-setting[hidden]{display:none}
+
+.route-review-steps li{margin:12px 0;line-height:1.5}.route-review-steps .route-detour{border-left:4px solid var(--rust,#b44b32);padding-left:12px;font-weight:600}.route-review .route-chain{margin-top:24px}

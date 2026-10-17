@@ -1,4 +1,4 @@
-import {createEngine,easternDate,puzzleFor,dailyDifficultyFor,streakFor,matchesPlayerName,orderMatchup} from './core.js';
+import {createEngine,easternDate,puzzleFor,dailyDifficultyFor,streakFor,matchesPlayerName,orderMatchup,reviewDailyRoute} from './core.js';
 import {allDecades,challengeURL,parseChallenge} from './challenges.js';
 import {portrait,teamLogo,connectionSentence,playerHistory,seasonRanges,difficultyPool,routePosition} from './presentation.js';
 import {rosterFor,canAddPlayer,appendConnection} from './explore.js';
@@ -169,6 +169,7 @@ function showCompletion(){
  $('completion-stars').hidden=mode!=='daily';if(mode==='daily')renderStars($('completion-stars'),dailyStars(shots,optimal,revealed||lost),`${dailyStars(shots,optimal,revealed||lost)} stars earned`);
  $('completion-minimum').textContent=longest()?(gameStyle==='career'?`${score.span}-year span · ${shots} shots`:`${route.length} unique players`):`Shortest route: ${shotLabel(optimal)}`;
  $('completion-message').textContent=lost?'Three Xs. Your round is over. Failed guesses did not change your chain.':longest()?'Every link follows your Snake rules.':shots===optimal?'You found a shortest possible route.':'Every connection verified. You reached the destination!';
+ $('completion-review').hidden=mode!=='daily'||revealed||lost||shots<=optimal;
  $('completion-restart').hidden=mode!=='free';$('completion-share').hidden=lost;$('completion').showModal();
 }
 function renderResult(){
@@ -179,8 +180,32 @@ function renderResult(){
  if(hintsUsed){const hintNote=document.createElement('p');hintNote.textContent=`${hintsUsed} hint${hintsUsed===1?'':'s'} used`;el.append(hintNote)}
  if(!revealed&&!lost){const b=document.createElement('button');b.textContent='Share result';b.onclick=share;el.append(b)}
  if(mode==='free'){const b=document.createElement('button');b.className='secondary';b.textContent='Choose another matchup';b.style.marginLeft='8px';b.onclick=setupFree;el.append(b)}
+ if(mode==='daily'&&!revealed&&!lost)appendRouteReview(el);
  if(!lost)appendAllAnswers(el);
 }
+function appendRouteReview(parent){
+ const section=document.createElement('details'),summary=document.createElement('summary');section.id='route-review';section.className='all-answers route-review';summary.textContent='Review my route';section.append(summary);parent.append(section);
+ let loaded=false;
+ const load=()=>{
+  if(loaded||!section.open)return;loaded=true;
+  const review=reviewDailyRoute(engine,route,shortHistory),intro=document.createElement('p');
+  intro.textContent=review.firstDetour<0?'Every selection stayed on a shortest possible route.':`Your route: ${shotLabel(currentShortestScore())}. Shortest possible: ${shotLabel(review.optimal)}. Every teammate link was valid.`;section.append(intro);
+  if(!review.recorded){const note=document.createElement('p');note.textContent='This older attempt has no selection history. Review follows the displayed route from left to right.';section.append(note)}
+  const list=document.createElement('ol');list.className='route-review-steps';
+  review.steps.forEach((step,index)=>{
+   const item=document.createElement('li');item.textContent=`${name(step.from)} → ${name(step.player)}: ${step.onShortest?'still on a shortest route':`best possible total was now ${shotLabel(step.after.shots)}`}.`;
+   if(index===review.firstDetour){item.className='route-detour';item.textContent='First detour. '+item.textContent;}
+   list.append(item);
+  });section.append(list);
+  if(review.firstDetour>=0){
+   const step=review.steps[review.firstDetour],title=document.createElement('h3'),note=document.createElement('p'),chain=document.createElement('ol');
+   title.textContent='A shortest route before that choice';note.textContent=`After choosing ${name(step.player)}, the original ${shotLabel(review.optimal)} target was no longer possible. This alternative keeps all your earlier selections.`;section.append(title,note,chain);
+   const alternative=step.before.route,links=alternative.slice(1).map((id,i)=>engine.evidence(alternative[i],id)[0].slice(0,2));renderRoute(chain,alternative,links,engine);
+  }
+ };
+ section.addEventListener('toggle',load);section.loadReview=load;
+}
+$('completion-review').onclick=()=>{closeCompletion();const section=$('route-review');if(section){section.open=true;section.loadReview();section.scrollIntoView?.({behavior:'smooth',block:'start'})}};
 function chainPortrait(id,linkedTeam=null){
  const head=portrait(id,name(id));if(id!==start&&id!==end)return head;
  const frame=document.createElement('span');frame.className='endpoint-portrait';frame.append(head);
@@ -254,6 +279,7 @@ function daily(){if(!data)return;longTarget=null;lookupRequest++;revision++;snak
  if(stored?.finished&&Array.isArray(stored.route)&&stored.route[0]===end&&stored.route.at(-1)===start)stored.route=[...stored.route].reverse();
  if(stored&&Array.isArray(stored.route)&&stored.route[0]===start&&stored.route.every((p,i)=>data.players[p]&&(!i||engine.evidence(stored.route[i-1],p).length))){route=stored.route;hintsUsed=Number.isInteger(stored.hintsUsed)&&stored.hintsUsed>=0?stored.hintsUsed:0;hintedPlayers=new Set(stored.hintedPlayers||[]);revealed=stored.revealed===true;finished=(stored.finished===true&&route.at(-1)===end);if(revealed&&!finished){route=[start];revealed=false}}
  if(!finished&&Array.isArray(stored?.rightRoute)&&stored.rightRoute[0]===end&&stored.rightRoute.every((id,i)=>data.players[id]&&!route.includes(id)&&(id===end||matchesPosition(data.players[id],gamePosition))&&(!i||engine.evidence(stored.rightRoute[i-1],id).length)))rightRoute=stored.rightRoute;
+ if(finished&&Array.isArray(stored?.shortHistory)&&stored.shortHistory.length===Math.max(0,route.length-2)&&stored.shortHistory.every(side=>side==='start'||side==='end'))shortHistory=[...stored.shortHistory];
  if(!finished){buildSide=stored?.buildSide==='end'?'end':'start';const history=stored?.shortHistory;shortHistory=Array.isArray(history)&&history.filter(x=>x==='start').length===route.length-1&&history.filter(x=>x==='end').length===rightRoute.length-1&&history.every(x=>x==='start'||x==='end')?history:[...Array(route.length-1).fill('start'),...Array(rightRoute.length-1).fill('end')];}
  strikes=Math.max(0,Math.min(3,Number.isInteger(stored?.strikes)?stored.strikes:0));if(strikes===3){finished=lost=true;}
  $('player-search').value='';$('player-results').replaceChildren();render();showStreak();status(finished?'Today’s attempt is saved. Come back tomorrow for a new matchup.':'Build your chain. Search any NHL player to add a link.');maybeShowIntro();}

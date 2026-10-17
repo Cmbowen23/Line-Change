@@ -143,6 +143,23 @@ export function createEngine(data,decades=null,{position='any',start=null,end=nu
 }
 // Keep ties in the supplied order; career starts come from full player records.
 export function orderMatchup(data,start,end){return data.players[start]?.[2]>data.players[end]?.[2]?[end,start]:[start,end]}
+// Replay accepted additions from either endpoint, keeping every earlier choice fixed.
+export function reviewDailyRoute(engine,route,history=[]){
+ const additions=Math.max(0,route.length-2),recorded=history.length===additions&&history.every(side=>side==='start'||side==='end');
+ const sides=recorded?history:Array(additions).fill('start');
+ let left=0,right=route.length-1;
+ function finish(){
+  const bridge=engine.shortest(route[left],route[right],[...route.slice(0,left),...route.slice(right+1)]);
+  return bridge?{shots:Math.max(1,left+route.length-1-right+Math.max(0,bridge.length-2)),route:[...route.slice(0,left),...bridge,...route.slice(right+1)]}:null;
+ }
+ const initial=finish(),steps=[];
+ for(const side of sides){
+  const before=finish(),from=route[side==='end'?right:left];
+  if(side==='end')right--;else left++;
+  const after=finish();steps.push({side,from,player:route[side==='end'?right:left],before,after,onShortest:after?.shots===initial?.shots});
+ }
+ return {optimal:initial?.shots,recorded,steps,firstDetour:steps.findIndex(step=>!step.onShortest)};
+}
 export function easternDate(now=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(now)}
 export function dailyDifficultyFor(data,date){
  const weekly=data.dailySchedule?.weeklyDifficulty;
