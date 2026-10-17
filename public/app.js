@@ -161,7 +161,7 @@ function acknowledgeIntro(){
  write('line-change-rules-seen-v1',true);
  if(!$('intro-longest').hidden)write('line-change-snake-rules-seen-v2:'+gameStyle,true);
 }
-function closeCompletion(){if($('completion').open)$('completion').close()}
+function closeCompletion(){if($('completion').open)$('completion').close();if($('shorter-choices').open)$('shorter-choices').close()}
 function showCompletion(){
  const shots=longest()?route.length-1:currentShortestScore(),score=longest()?snakeScore(gameStyle,routeLinks):null;
  $('completion-eyebrow').textContent=lost?'ROUND OVER':'LINE COMPLETE';$('completion-title').textContent=lost?'Run over.':'You’re connected!';
@@ -169,7 +169,6 @@ function showCompletion(){
  $('completion-stars').hidden=mode!=='daily';if(mode==='daily')renderStars($('completion-stars'),dailyStars(shots,optimal,revealed||lost),`${dailyStars(shots,optimal,revealed||lost)} stars earned`);
  $('completion-minimum').textContent=longest()?(gameStyle==='career'?`${score.span}-year span · ${shots} shots`:`${route.length} unique players`):`Shortest route: ${shotLabel(optimal)}`;
  $('completion-message').textContent=lost?'Three Xs. Your round is over. Failed guesses did not change your chain.':longest()?'Every link follows your Snake rules.':shots===optimal?'You found a shortest possible route.':'Every connection verified. You reached the destination!';
- $('completion-review').hidden=mode!=='daily'||revealed||lost||shots<=optimal;
  $('completion-restart').hidden=mode!=='free';$('completion-share').hidden=lost;$('completion').showModal();
 }
 function renderResult(){
@@ -180,32 +179,31 @@ function renderResult(){
  if(hintsUsed){const hintNote=document.createElement('p');hintNote.textContent=`${hintsUsed} hint${hintsUsed===1?'':'s'} used`;el.append(hintNote)}
  if(!revealed&&!lost){const b=document.createElement('button');b.textContent='Share result';b.onclick=share;el.append(b)}
  if(mode==='free'){const b=document.createElement('button');b.className='secondary';b.textContent='Choose another matchup';b.style.marginLeft='8px';b.onclick=setupFree;el.append(b)}
- if(mode==='daily'&&!revealed&&!lost)appendRouteReview(el);
  if(!lost)appendAllAnswers(el);
 }
-function appendRouteReview(parent){
- const section=document.createElement('details'),summary=document.createElement('summary');section.id='route-review';section.className='all-answers route-review';summary.textContent='Review my route';section.append(summary);parent.append(section);
- let loaded=false;
- const load=()=>{
-  if(loaded||!section.open)return;loaded=true;
-  const review=reviewDailyRoute(engine,route,shortHistory),intro=document.createElement('p');
-  intro.textContent=review.firstDetour<0?'Every selection stayed on a shortest possible route.':`Your route: ${shotLabel(currentShortestScore())}. Shortest possible: ${shotLabel(review.optimal)}. Every teammate link was valid.`;section.append(intro);
-  if(!review.recorded){const note=document.createElement('p');note.textContent='This older attempt has no selection history. Review follows the displayed route from left to right.';section.append(note)}
-  const list=document.createElement('ol');list.className='route-review-steps';
-  review.steps.forEach((step,index)=>{
-   const item=document.createElement('li');item.textContent=`${name(step.from)} → ${name(step.player)}: ${step.onShortest?'still on a shortest route':`best possible total was now ${shotLabel(step.after.shots)}`}.`;
-   if(index===review.firstDetour){item.className='route-detour';item.textContent='First detour. '+item.textContent;}
-   list.append(item);
-  });section.append(list);
-  if(review.firstDetour>=0){
-   const step=review.steps[review.firstDetour],title=document.createElement('h3'),note=document.createElement('p'),chain=document.createElement('ol');
-   title.textContent='A shortest route before that choice';note.textContent=`After choosing ${name(step.player)}, the original ${shotLabel(review.optimal)} target was no longer possible. This alternative keeps all your earlier selections.`;section.append(title,note,chain);
-   const alternative=step.before.route,links=alternative.slice(1).map((id,i)=>engine.evidence(alternative[i],id)[0].slice(0,2));renderRoute(chain,alternative,links,engine);
+function openShorterChoices(step){
+ const {left,right,shots}=step.before,from=step.from,to=route[step.side==='end'?left:right],blocked=[...route.slice(0,left),...route.slice(right+1)];
+ const choices=engine.shortestChoices(from,to,blocked),list=$('shorter-players'),preview=$('shorter-preview');
+ list.replaceChildren();preview.replaceChildren();preview.hidden=true;
+ $('shorter-title').textContent=`${shotLabel(shots)} · Better choices`;
+ const origin=$('shorter-origin');origin.replaceChildren(portrait(from,name(from)));const caption=document.createElement('strong');caption.textContent=name(from);origin.append(caption);
+ let shown=0;
+ function batch(){
+  for(const id of choices.slice(shown,shown+24)){
+   const button=document.createElement('button'),label=document.createElement('span');button.type='button';button.className='shorter-player';button.dataset.playerId=id;label.textContent=name(id);button.append(portrait(id,name(id)),label);
+   button.onclick=()=>{
+    const rest=engine.shortest(id,to,[...blocked,from]),bridge=[from,...rest];
+    const alternative=[...route.slice(0,left),...(step.side==='end'?bridge.reverse():bridge),...route.slice(right+1)];
+    const links=alternative.slice(1).map((p,i)=>engine.evidence(alternative[i],p)[0].slice(0,2));renderRoute(preview,alternative,links,engine);preview.hidden=false;
+    for(const item of list.children)item.setAttribute('aria-pressed',String(item===button));
+    preview.scrollIntoView?.({behavior:'smooth',block:'nearest'});
+   };list.append(button);
   }
- };
- section.addEventListener('toggle',load);section.loadReview=load;
+  shown+=24;$('shorter-more').hidden=shown>=choices.length;
+ }
+ $('shorter-more').onclick=batch;batch();$('shorter-choices').showModal();
 }
-$('completion-review').onclick=()=>{closeCompletion();const section=$('route-review');if(section){section.open=true;section.loadReview();section.scrollIntoView?.({behavior:'smooth',block:'start'})}};
+$('close-shorter').onclick=()=>$('shorter-choices').close();
 function chainPortrait(id,linkedTeam=null){
  const head=portrait(id,name(id));if(id!==start&&id!==end)return head;
  const frame=document.createElement('span');frame.className='endpoint-portrait';frame.append(head);
@@ -226,6 +224,7 @@ function endpointLinkedTeam(id,index,players,pending,links=routeLinks,isLookup=f
 function renderRoute(target=$('chain'),path=route,links=routeLinks,lookupEngine=null){
  const isLookup=Boolean(lookupEngine),chain=target,openTeams=new Set([...chain.querySelectorAll('.chain-teams[open]')].map(el=>Number(el.dataset.playerId)));
  const destination=isLookup?path.at(-1):end,pending=!isLookup&&path.at(-1)!==end,players=pending?(longest()?[...path,end]:[...path,...[...rightRoute].reverse()]):path;
+ const review=!isLookup&&target===$('chain')&&mode==='daily'&&finished&&!lost&&!revealed&&currentShortestScore()>optimal?reviewDailyRoute(engine,route,shortHistory):null,detour=review&&review.firstDetour>=0?review.steps[review.firstDetour]:null;
  const positionFor=i=>players.length===2?{row:1,column:i*2+1}:routePosition(i);
  chain.className='route-chain'+(players.length===2?' route-pair':'');chain.setAttribute('aria-label',isLookup?'Connection lookup route':revealed?'Revealed route':'Your player chain');chain.replaceChildren();
  for(let i=0;i<players.length;i++){
@@ -243,6 +242,9 @@ function renderRoute(target=$('chain'),path=route,links=routeLinks,lookupEngine=
    const [team,year]=isLookup?links[i]:longest()?routeLinks[i]:engine.evidence(id,players[i+1])[0];
    const sentence=connectionSentence({fromName:name(id),toName:name(players[i+1]),teamName:data.teams[team]||team,season:season(year)});link.setAttribute('aria-label',sentence);link.title=sentence;
    const logo=teamLogo(team,data.teams[team]||team),label=document.createElement('span');label.className='route-season';label.textContent=season(year);label.setAttribute('aria-hidden','true');link.append(logo,label);
+  }
+  if(detour&&((id===detour.from&&players[i+1]===detour.player)||(id===detour.player&&players[i+1]===detour.from))){
+   const marker=document.createElement('button');marker.type='button';marker.className='shorter-route-marker';marker.textContent='↗ Shorter route';marker.setAttribute('aria-label','Show better choices from '+name(detour.from));marker.onclick=()=>openShorterChoices(detour);link.className+=' has-shorter-route';link.append(marker);
   }
   chain.append(link);
  }

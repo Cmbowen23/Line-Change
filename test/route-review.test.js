@@ -17,3 +17,11 @@ test('optimal routes have no detours and older attempts use an explicit route-or
  const old=reviewDailyRoute(engine,[1,2,4,5,8]);assert.equal(old.recorded,false);assert.equal(old.firstDetour,1);
  const direct=reviewDailyRoute(engine,[1,2],[]);assert.equal(direct.optimal,1);assert.equal(direct.firstDetour,-1);
 });
+
+test('shorter choices include all optimal next players and exclude earlier committed players',()=>{
+ const e=createEngine({players:{...players,9:['Player 9','C']},groups:[...groups,['X',20202021,[2,9]],['Y',20202021,[9,8]]]});
+ assert.deepEqual(e.shortestChoices(8,2,[1]),[3,9]);
+ assert.deepEqual(e.shortestChoices(8,2,[1,3]),[9]);
+ assert.deepEqual(e.shortestChoices(8,2,[1,3,9]),[5]);
+ assert.deepEqual(e.shortestChoices(8,8,[1]),[]);
+});

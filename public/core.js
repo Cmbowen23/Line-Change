@@ -20,6 +20,14 @@ export function createEngine(data,decades=null,{position='any',start=null,end=nu
    for(const gi of memberships.get(p)||[]){if(seen.has(gi))continue;seen.add(gi);for(const n of data.groups[gi][2])if(!blocked.has(n)&&!parents.has(n)){parents.set(n,p);q.push(n)}}
   }return null;
  }
+ function shortestChoices(a,b,excluded=[]){
+  const blocked=new Set(excluded);blocked.delete(a);blocked.delete(b);
+  const distance=new Map([[b,0]]),seen=new Set(),queue=[b];
+  for(const p of queue)for(const gi of memberships.get(p)||[]){if(seen.has(gi))continue;seen.add(gi);for(const id of data.groups[gi][2])if(!blocked.has(id)&&!distance.has(id)){distance.set(id,distance.get(p)+1);queue.push(id)}}
+  if(!distance.has(a))return [];
+  const choices=new Set();for(const gi of memberships.get(a)||[])for(const id of data.groups[gi][2])if(!blocked.has(id)&&distance.get(id)===distance.get(a)-1)choices.add(id);
+  return [...choices].sort((x,y)=>data.players[x][0].localeCompare(data.players[y][0])||x-y);
+ }
  function allShortest(a,b){
   function distances(root){
    const ds=new Map([[root,0]]),seen=new Set(),q=[root];
@@ -139,7 +147,7 @@ export function createEngine(data,decades=null,{position='any',start=null,end=nu
   if(options.preferFewerRoutes){for(const choice of choices)assess(choice.start,choice.ends,shots);return result(best)}
   return {start,end:ends[Math.floor(random()*ends.length)],par:shots};
  }
- return {evidence,shortest,search,hintTeams,allShortest,randomMatchup,forward,randomLongestMatchup,connectionProfile};
+ return {evidence,shortest,shortestChoices,search,hintTeams,allShortest,randomMatchup,forward,randomLongestMatchup,connectionProfile};
 }
 // Keep ties in the supplied order; career starts come from full player records.
 export function orderMatchup(data,start,end){return data.players[start]?.[2]>data.players[end]?.[2]?[end,start]:[start,end]}
@@ -150,7 +158,7 @@ export function reviewDailyRoute(engine,route,history=[]){
  let left=0,right=route.length-1;
  function finish(){
   const bridge=engine.shortest(route[left],route[right],[...route.slice(0,left),...route.slice(right+1)]);
-  return bridge?{shots:Math.max(1,left+route.length-1-right+Math.max(0,bridge.length-2)),route:[...route.slice(0,left),...bridge,...route.slice(right+1)]}:null;
+  return bridge?{left,right,shots:Math.max(1,left+route.length-1-right+Math.max(0,bridge.length-2)),route:[...route.slice(0,left),...bridge,...route.slice(right+1)]}:null;
  }
  const initial=finish(),steps=[];
  for(const side of sides){
