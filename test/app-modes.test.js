@@ -382,3 +382,24 @@ test('completed Daily marks the detour on the board and shows better player head
  ui.element('close-shorter').onclick();ui.daily();assert.equal(markers().length,1);markers()[0].onclick();assert.deepEqual(ui.element('shorter-players').children.map(x=>x.dataset.playerId),[3,9]);
  ui.setupFree();assert.equal(ui.element('shorter-choices').open,false);ui.beginFree(1,8);ui.add(2);ui.add(3);assert.equal(markers().length,0);
 });
+
+test('career player arrows follow roster order without changing the chain and Back restores the same roster',()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,4);
+ ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011,query:''});ui.element('explorer').scrollTop=420;
+ const rows=ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.filter(x=>x.tagName==='button'),ids=rows.map(x=>x.dataset.playerId);
+ rows[0].onclick();assert.equal(ui.element('explore-prev-season').textContent,'← Previous player');assert.equal(ui.element('explore-next-season').textContent,'Next player →');assert.equal(ui.element('explore-prev-season').disabled,true);
+ const before=ui.state();ui.element('explorer').scrollTop=130;
+ for(let i=1;i<ids.length;i++){ui.element('explore-next-season').onclick();assert.equal(ui.element('explore-title').textContent,graph.players[ids[i]][0])}
+ assert.equal(ui.element('explore-next-season').disabled,true);ui.element('explore-next-season').onclick();assert.equal(ui.element('explore-title').textContent,graph.players[ids.at(-1)][0]);
+ for(let i=ids.length-2;i>=0;i--)ui.element('explore-prev-season').onclick();assert.equal(ui.element('explorer').scrollTop,130);assert.deepEqual(ui.state(),before);
+ ui.element('explore-back').onclick();assert.match(ui.element('explore-title').textContent,/Team A/);assert.equal(ui.element('explorer').scrollTop,420);assert.equal(ui.element('explore-next-season').textContent,'Next season →');
+});
+
+test('player navigation respects roster search, position order, and the selected endpoint for Add to chain',()=>{
+ const ui=app();ui.configure(graph,'shortest');ui.beginFree(1,4);
+ ui.openExplorer({kind:'roster',playerId:4,team:'C',year:20132014,query:''});
+ const rows=ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.filter(x=>x.tagName==='button');rows.find(x=>x.dataset.playerId===4).onclick();
+ ui.element('explore-next-season').onclick();assert.equal(ui.element('explore-title').textContent,'Next');assert.equal(ui.state().buildSide,'end');ui.element('explore-add').onclick();assert.deepEqual(ui.state().rightRoute,[4,3]);assert.equal(ui.state().strikes,0);
+ ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011,query:'Bridge'});ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.find(x=>x.tagName==='button').onclick();assert.equal(ui.element('explore-prev-season').disabled,true);assert.equal(ui.element('explore-next-season').disabled,true);ui.element('explore-back').onclick();assert.equal(ui.element('roster-search').value,'Bridge');
+ ui.configure(graph,'shortest','defense');ui.beginFree(1,4);ui.openExplorer({kind:'roster',playerId:1,team:'A',year:20102011});const sorted=ui.element('explore-content').children.find(x=>x.id==='explore-roster').children.filter(x=>x.tagName==='button');sorted[0].onclick();for(let i=1;i<sorted.length;i++){ui.element('explore-next-season').onclick();assert.equal(ui.element('explore-title').textContent,graph.players[sorted[i].dataset.playerId][0])}
+});

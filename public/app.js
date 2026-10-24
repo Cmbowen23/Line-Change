@@ -436,7 +436,10 @@ function restoreExplorerSide(view){
  if(longest()||finished||solving||!view?.buildSide||view.buildSide===buildSide)return;
  buildSide=view.buildSide;save();render();
 }
-function browseExplorerPlayer(id,connection){$('explore-feedback').hidden=true;visitExplorer({kind:'player',id,connection,buildSide:exploreStack.at(-1)?.buildSide??buildSide});}
+function browseExplorerPlayer(id,connection){
+ const origin=exploreStack.at(-1);$('explore-feedback').hidden=true;
+ visitExplorer({kind:'player',id,connection,buildSide:origin?.buildSide??buildSide,rosterContext:origin?.kind==='roster'?{...origin}:null});
+}
 function addExplorerPlayer(){
  const view=exploreStack.at(-1);if(view?.kind!=='player')return;
  restoreExplorerSide(view);
@@ -498,6 +501,21 @@ function changeExplorerSeason(direction){
  const {rosters,index}=rosterNavigation(view);const next=rosters[index+direction];if(index<0||!next)return;
  rememberExplorerPosition();exploreStack[exploreStack.length-1]=next;renderExplorer();restoreExplorerPosition();
 }
+function rosterPlayerIds(view){
+ const blocked=id=>!!activePositionRule()&&id!==start&&id!==end&&!matchesPosition(data.players[id],gamePosition);
+ const rank=id=>blocked(id)?2:usedPlayers().includes(id)&&id!==end?1:0;
+ return rosterFor(data,view.team,view.year,activeDecades()).filter(id=>matchesPlayerName(id,name(id),view.query||'')).sort((a,b)=>rank(a)-rank(b));
+}
+function playerNavigation(view){
+ if(view.kind!=='player'||!view.rosterContext)return null;
+ const ids=rosterPlayerIds(view.rosterContext);return {ids,index:ids.indexOf(view.id)};
+}
+function changeExplorerPlayer(direction){
+ const view=exploreStack.at(-1),navigation=view&&playerNavigation(view);if(!navigation||navigation.index<0)return;
+ const id=navigation.ids[navigation.index+direction];if(id===undefined)return;
+ rememberExplorerPosition();$('explore-feedback').hidden=true;
+ exploreStack[exploreStack.length-1]={...view,id};renderExplorer();restoreExplorerPosition();
+}
 function renderExplorer(){
  const view=exploreStack.at(-1);if(!view)return;restoreExplorerSide(view);
  const bounds=longest()&&gameStyle==='career'?snakeContext().bounds:null;
@@ -508,12 +526,19 @@ function renderExplorer(){
  $('explore-step').textContent=bounds?(routeLinks.length?`Next shot: a later season than ${season(routeLinks.at(-1)[1])}, ending by ${season(bounds.last)}.`:`First shot: ${name(start)}’s rookie season, ${season(bounds.first)}.`):longest()?`${styleNames[gameStyle]} · ${routeLinks.length} shots taken.`:`Shortest route: ${shotLabel(optimal)}.`;
 
  $('explore-back').disabled=exploreStack.length<2;$('explore-content').replaceChildren();$('roster-search-box').hidden=view.kind!=='roster';
- $('explore-season-nav').hidden=false;$('explore-prev-season').hidden=$('explore-next-season').hidden=view.kind!=='roster';
+ const playerNav=playerNavigation(view),isRoster=view.kind==='roster',canNavigate=isRoster||playerNav?.index>=0;
+ $('explore-season-nav').hidden=false;$('explore-prev-season').hidden=$('explore-next-season').hidden=!canNavigate;
+ $('explore-season-nav').setAttribute('aria-label',isRoster?'Season rosters':'Roster players');
+ $('explore-prev-season').textContent=isRoster?'← Previous season':'← Previous player';$('explore-next-season').textContent=isRoster?'Next season →':'Next player →';
+ $('explore-prev-season').setAttribute('aria-label',isRoster?'Previous season roster':'Previous roster player');$('explore-next-season').setAttribute('aria-label',isRoster?'Next season roster':'Next roster player');
  if(view.kind==='roster'){
   const {playerId,rosters,index}=rosterNavigation(view);
   $('explore-prev-season').disabled=index<=0;
   $('explore-next-season').disabled=index<0||index>=rosters.length-1;
   $('explore-season-context').textContent=index<0?'Roster':`${index+1} of ${rosters.length}`;
+ }else if(playerNav){
+  $('explore-prev-season').disabled=playerNav.index<=0;$('explore-next-season').disabled=playerNav.index<0||playerNav.index>=playerNav.ids.length-1;
+  $('explore-season-context').textContent=`${playerNav.index+1} of ${playerNav.ids.length}`;
  }
  const content=$('explore-content');
  if(view.kind==='roster'){
@@ -532,8 +557,7 @@ function renderExplorer(){
 function renderRoster(){
  const view=exploreStack.at(-1);if(view?.kind!=='roster')return;let list=$('explore-roster');if(!list){list=document.createElement('div');list.id='explore-roster';$('explore-content').append(list)}list.replaceChildren();
  const blocked=id=>!!activePositionRule()&&id!==start&&id!==end&&!matchesPosition(data.players[id],gamePosition);
- const rank=id=>blocked(id)?2:usedPlayers().includes(id)&&id!==end?1:0;
- const ids=rosterFor(data,view.team,view.year,activeDecades()).filter(id=>matchesPlayerName(id,name(id),view.query||'')).sort((a,b)=>rank(a)-rank(b));
+ const ids=rosterPlayerIds(view);
  const count=document.createElement('p');count.className='explore-note';count.setAttribute('role','status');count.textContent=ids.length?`${ids.length} ${ids.length===1?'player':'players'}`:'No players match this search.';list.append(count);
  for(const id of ids){const button=document.createElement('button');button.className='roster-player'+(blocked(id)?' position-excluded':usedPlayers().includes(id)&&id!==end?' roster-used':'');button.dataset.playerId=id;button.type='button';const body=document.createElement('span'),title=document.createElement('strong'),label=document.createElement('small');title.textContent=name(id);label.textContent=data.players[id][1]+(id===end?' · Destination':usedPlayers().includes(id)?' · Already used':blocked(id)?'':'');body.append(title,label);button.append(portrait(id,name(id)),body);button.onclick=()=>browseExplorerPlayer(id,[view.team,view.year]);list.append(button)}
 }
@@ -541,8 +565,8 @@ $('shortest-only').onchange=()=>{shortestOnly=$('shortest-only').checked;write('
 $('explore-add').onclick=addExplorerPlayer;
 $('explore-undo').onclick=undoExplorerLink;
 $('close-explorer').onclick=closeExplorer;
-$('explore-prev-season').onclick=()=>changeExplorerSeason(-1);
-$('explore-next-season').onclick=()=>changeExplorerSeason(1);
+$('explore-prev-season').onclick=()=>exploreStack.at(-1)?.kind==='player'?changeExplorerPlayer(-1):changeExplorerSeason(-1);
+$('explore-next-season').onclick=()=>exploreStack.at(-1)?.kind==='player'?changeExplorerPlayer(1):changeExplorerSeason(1);
 $('explore-back').onclick=()=>{if(exploreStack.length>1){rememberExplorerPosition();exploreStack.pop();renderExplorer();restoreExplorerPosition()}};
 $('explorer').addEventListener('scroll',rememberExplorerPosition);
 $('explorer').addEventListener('close',()=>{if(!$('explorer').open){exploreStack=[]}});
